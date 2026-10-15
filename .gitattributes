@@ -1,0 +1,4 @@
+# Keep the prediction ledger byte-for-byte: an OpenTimestamps proof covers its exact bytes (CRLF line endings, as
+# written on Windows). Without this, git could convert the line endings and the proof would no longer match.
+forward/predictions.jsonl -text
+*.ots binary

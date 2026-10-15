@@ -1,0 +1,23 @@
+{
+  "ticker": "XX",
+  "name": {"value": "Roundhill S&P 500 Target 10,000 2030 ETF", "status": "VERIFIED", "source": "Prospectus 2026-09-29, cover"},
+  "index": {"value": "S&P 500", "status": "VERIFIED", "source": "Prospectus 2026-09-29, p.2"},
+  "index_target": {"value": 10000, "status": "VERIFIED", "source": "Prospectus 2026-09-29, p.2"},
+  "target_date": {"value": "2030-01-10", "status": "VERIFIED", "source": "Prospectus 2026-09-29, p.2"},
+  "fee": {"value": 0.0099, "status": "VERIFIED", "source": "Prospectus 2026-09-29, p.1 (unitary; trading costs extra)"},
+  "cash_if_worthless": {"value": [0.01, 0.10], "status": "VERIFIED", "source": "Prospectus 2026-09-29, p.9 ('approximately 1% to 10% of its net assets')"},
+  "roll_rule": {"value": null, "status": "OPEN", "source": "Prospectus p.9: a new target and date at each period end; rule not disclosed"},
+  "legs": [
+    {
+      "underlying": {"value": "SPY", "status": "VERIFIED", "source": "Holdings files from 2026-09-30 (4SPY 300110C00995010)"},
+      "option_type": {"value": "call", "status": "VERIFIED", "source": "Holdings files; prospectus p.7"},
+      "sign": {"value": 1, "status": "VERIFIED", "source": "Holdings files (positive contracts)"},
+      "exercise": {"value": "european", "status": "VERIFIED", "source": "Prospectus 2026-09-29, p.7"},
+      "settlement": {"value": "cash", "status": "VERIFIED", "source": "Prospectus 2026-09-29, p.7 (settlement price assumed SPY official close: ASSUMPTIONS A1)"},
+      "strike": {"value": 995.01, "status": "VERIFIED", "source": "Holdings files from 2026-09-30"},
+      "expiry": {"value": "2030-01-10", "status": "VERIFIED", "source": "Holdings files from 2026-09-30"},
+      "contracts_per_share": {"value": 0.0048, "status": "MEASURED", "source": "Holdings 2026-10-01..2026-10-13: 48/10,000, 192/40,000, 288/60,000 (FINDINGS F1)"},
+      "multiplier": {"value": 100, "status": "VERIFIED", "source": "Holdings files: MarketValue = contracts x 100 x mark"}
+    }
+  ]
+}

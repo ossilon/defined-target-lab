@@ -1,0 +1,35 @@
+# Keep all data out of the repository: TradingView licenses its data for display only, and Roundhill's site terms
+# forbid redistributing or storing its files without written permission. data/README.md names each file's source.
+data/*
+!data/README.md
+
+# Private working documents (the author's planning notes and AI build prompt hold personal context) and the private
+# list of personal terms that scripts/scan_identifiers.py looks for. The repository never includes them.
+PLAN.md
+PROMPT.md
+BACKLOG.md
+docs/README_DRAFT.md
+forward/hypotheses_draft.json
+forward/hypotheses_draft_v1.json
+identifiers_local.txt
+
+# Daily forward-test notes hold issuer-derived daily numbers; publishing them needs Roundhill's permission.
+forward/daily/
+
+# Raw per-run outputs (someone could reverse daily series into prices); the project publishes aggregates only.
+results/raw/
+
+# Local cross-checks import private sibling folders outside this repository.
+tests/*_local.py
+
+# Python and numba caches, build output, virtual environments, local secrets
+__pycache__/
+*.pyc
+*.nbi
+*.nbc
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.env

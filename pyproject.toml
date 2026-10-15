@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "definedtarget"
+dynamic = ["version"]
+description = "Open tools to price, forward-test and simulate defined-target call ETFs (first fund: XX, S&P 500 10,000 by 2030). Not affiliated with any issuer. Not investment advice."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+dependencies = ["numpy", "pandas", "numba"]
+keywords = ["etf", "options", "leaps", "flex-options", "black-scholes", "implied-volatility", "monte-carlo",
+            "forward-testing"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+
+[project.scripts]
+definedtarget = "definedtarget.__main__:main"
+
+[tool.setuptools]
+packages = ["definedtarget", "definedtarget.forward"]
+
+[tool.setuptools.package-data]
+definedtarget = ["funds/*.json"]
+
+[tool.setuptools.dynamic]
+version = { attr = "definedtarget.__version__" }
