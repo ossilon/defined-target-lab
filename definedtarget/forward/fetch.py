@@ -68,11 +68,11 @@ def _append_manifest(root, record):
 
 
 def last_saved(records, url):
-    """The most recent record for this URL whose bytes the code saved (status 'saved'), or None."""
-    for rec in reversed(records):
-        if rec["url"] == url and rec["result"] == "saved":
-            return rec
-    return None
+    """The most recently downloaded record for this URL whose bytes the code saved (status 'saved'), or None.
+
+    By download time, not manifest position (imported cloud captures may be appended out of order)."""
+    saved = [rec for rec in records if rec["url"] == url and rec["result"] == "saved"]
+    return max(saved, key=lambda rec: rec["fetched_utc"]) if saved else None
 
 
 def capture(url, name, source, expect_prefix, root=None, now=None, getter=http_get, records=None):

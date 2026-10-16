@@ -51,8 +51,13 @@ def _num(text):
 
 
 def saved_versions(root, prefix):
-    """Manifest records of saved (valid) files whose short name starts with prefix, oldest first."""
-    return [r for r in fetch.read_manifest(root) if r["name"].startswith(prefix) and r["result"] == "saved"]
+    """Manifest records of saved (valid) files whose short name starts with prefix, oldest first.
+
+    Sorted by download time, not by position in the manifest: captures imported from the cloud can be appended
+    after newer local ones, and "latest" must still mean the most recent download.
+    """
+    recs = [r for r in fetch.read_manifest(root) if r["name"].startswith(prefix) and r["result"] == "saved"]
+    return sorted(recs, key=lambda r: r["fetched_utc"])
 
 
 def read_text(root, rec):
