@@ -200,3 +200,32 @@ elasticity, 1.25 against the previous close's). A volatility slide fits it: the 
 that lasted would have added 0.37. One span cannot separate a fading slide from noise: the gap of 0.28 points is
 smaller than the noise one would expect over nine days of independent changes (about 0.5 points). Hypotheses H8
 (day to day) and H14 (10-session spans) test both from 2026-10-14.
+
+**F12. When the S&P falls, the 3-year volatility at XX's strike rises only about 1 point per 10% fall: a fifth of
+what one-year volatility does.** Measured 2026-10-17 for the browser simulator's "vol follows the S&P" default.
+The slide is the change in implied volatility (points) for a 10% fall, from a regression on the S&P's log return.
+
+| Series | Span | Window | Slide per -10% (standard error) | R² |
+|---|---|---|---|---|
+| VIX1Y (Cboe one-year index) | 2007-2026 | 1 / 5 / 21 / 63 days | +4.6 / +4.3 / +4.8 / +4.3 (0.05-0.40) | 0.55-0.60 |
+| Listed S&P 500 Dec-2029 10,000 call, implied vol of each day's last trade | 2024-06 to 2026-09, 252 traded days | consecutive trades | +1.1 (0.13) | 0.22 |
+| ... days with 5 or more contracts | same | consecutive trades | +1.1 (0.15) | 0.30 |
+| ... last trade of each week | same | weekly | +0.8 (0.17) | 0.17 |
+| ... last trade of each month | same | monthly | -0.3 (0.33) | 0.02 |
+| VIX1Y on the same traded days | same | consecutive trades | +5.0 (0.21) | 0.69 |
+
+The listed call has the same strike as XX's option (S&P 10,000 ≈ SPY 995.01) and an expiry three weeks earlier, so
+its implied vol is the closest public proxy for XX's: in late September 2026 it traded at 17.0-17.3%, against the
+vendor's 16.4-16.9% marks for XX. Its slide is about 0.2 times VIX1Y's on the same days; 0.2 × VIX1Y's 19-year +4.6
+gives a similar +0.9. In the April 2025 sell-off the S&P fell 13.6% (2025-03-07 to 04-08) and this vol rose 2.3
+points (14.0% to 16.3%), then fell back to 13.5% on the next day's rebound. So the response is real but small and it
+fades: at monthly spacing it is indistinguishable from zero (26 months; wide error).
+
+What it means: XX's "volatility cushion" in a crash is small, and the slide you assume decides a crash scenario.
+On the 2026-10-13 example (simulator model), an instant 10% fall takes NAV down 45.8% with no vol change, 38.4% with
+the measured +1.0 point, and only 10.0% if XX's vol jumped like VIX1Y (+4.6). The simulator uses +1.0 point per
+-10% as its default slide, with the switch and slider to try others (VIX1Y's +4.6 is the upper reference). Caveats: thin trading
+(often one contract a day), each day's last trade is not at the index close, rates and the dividend yield are
+assumed (Treasury zero curve; SPY's trailing 12-month yield), and F11 saw the vendor's marks move the other way
+over ten closes. Data stay local (TradingView quotes and Cboe's VIX1Y file); only these statistics are published.
+Code: `scripts/measure_vol_slide.py` (the VIX1Y rows, from your own closes and Cboe's free file).

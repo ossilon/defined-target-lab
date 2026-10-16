@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased (v0.2.0: browser simulator)
+
+### Added
+- **Simulator model** (`definedtarget/sim.py`): value, leverage, one day's cost and odds for any fund made of option
+  legs plus cash (calls or puts, bought or sold), with volatility that can follow the index. Pinned to
+  `analytics.py` and `valuation.py` for XX to 1e-9.
+- **Browser engine** (`web/engine.js`, no libraries) and **self-test** (`web/selftest.html`): 716 answers written by
+  the Python engine (`scripts/make_golden.py` -> `web/golden.json`) must all match in the browser; a test fails if
+  the answers go stale.
+- **Volatility slide measured** (FINDINGS F12, `scripts/measure_vol_slide.py`): the 3-year vol at XX's strike rises
+  about 1 point per 10% S&P fall, a fifth of VIX1Y's 4.6.
+
 ## v0.1.1 (2026-10-17)
 
 Fixes from audit B10a (an independent review of the pricing core, which it reproduced to 1e-7), plus new captures.

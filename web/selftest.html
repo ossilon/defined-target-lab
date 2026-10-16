@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>XX // ENGINE SELFTEST</title>
+<style>
+:root{--bg:#000;--fg:#33ff66;--dim:#1c8a3c;--amb:#ffb000;--red:#ff3355}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 "Cascadia Mono",Consolas,"Lucida Console","Courier New",monospace}
+body:after{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px)}
+.wrap{max-width:1080px;margin:0 auto;padding:12px 16px 32px}
+h1{font-size:15px;font-weight:normal;color:var(--amb);margin:6px 0 10px}
+#verdict{font-size:22px;margin:8px 0;text-shadow:0 0 6px rgba(51,255,102,.55)}
+#verdict.bad{color:var(--red);text-shadow:none}
+pre{margin:0;font:inherit;white-space:pre-wrap;word-break:break-word}
+.dim{color:var(--dim)} .bad{color:var(--red)} .amb{color:var(--amb)}
+table{border-collapse:collapse;width:100%;margin-top:8px}
+td,th{padding:2px 6px;text-align:left;font-weight:normal;border-bottom:1px solid #0c3318}
+th{color:var(--amb)}
+</style></head><body><div class="wrap">
+<h1>&#9617;&#9618;&#9619; DEFINED-TARGET-LAB &#9619;&#9618;&#9617; ENGINE SELFTEST</h1>
+<pre class="dim">engine.js vs answers written by the Python engine (web/golden.json). Pass rule: |js - python| &lt;= abs + rel x |python|.</pre>
+<div id="verdict">running...</div>
+<pre id="summary" class="dim"></pre>
+<table id="fails" hidden><thead><tr><th>fn</th><th>note</th><th>args</th><th>python</th><th>js</th></tr></thead><tbody></tbody></table>
+</div>
+<script src="engine.js"></script>
+<script>
+(function () {
+  "use strict";
+  function dec(x) {
+    if (x === "NaN") return NaN;
+    if (x === "Infinity") return Infinity;
+    if (x === "-Infinity") return -Infinity;
+    if (Array.isArray(x)) return x.map(dec);
+    if (x && typeof x === "object") { var o = {}; for (var k in x) o[k] = dec(x[k]); return o; }
+    return x;
+  }
+  function close(got, exp, tol) {
+    if (typeof exp === "number") {
+      if (exp !== exp) return got !== got;                      // NaN must stay NaN
+      if (!isFinite(exp)) return got === exp;
+      return typeof got === "number" && Math.abs(got - exp) <= tol.abs + tol.rel * Math.abs(exp);
+    }
+    if (exp === null) return got === null;
+    if (Array.isArray(exp)) return Array.isArray(got) && got.length === exp.length &&
+      exp.every(function (e, i) { return close(got[i], e, tol); });
+    if (typeof exp === "object") return Object.keys(exp).every(function (k) { return close(got[k], exp[k], tol); });
+    return got === exp;
+  }
+  function show(x) { return JSON.stringify(x, function (k, v) { return (typeof v === "number" && !isFinite(v)) ? String(v) : v; }); }
+  var t0 = performance.now();
+  fetch("golden.json", {cache: "no-store"}).then(function (r) { return r.json(); }).then(function (doc) {
+    var fails = [], perFn = {};
+    doc.cases.forEach(function (c) {
+      var args = dec(c.args), exp = dec(c.expect), got;
+      try { got = DTL[c.fn].apply(null, args); } catch (e) { got = "ERROR " + e.message; }
+      var ok = close(got, exp, c.tol);
+      perFn[c.fn] = perFn[c.fn] || [0, 0];
+      perFn[c.fn][ok ? 0 : 1]++;
+      if (!ok) fails.push([c.fn, c.note || "", show(args), show(exp), show(got)]);
+    });
+    var ms = (performance.now() - t0).toFixed(0);
+    var v = document.getElementById("verdict");
+    v.textContent = fails.length ? "[ " + fails.length + " FAIL ] of " + doc.cases.length + " cases"
+                                 : "[ ALL PASS ] " + doc.cases.length + " cases, 0 FAIL";
+    if (fails.length) v.className = "bad";
+    document.getElementById("summary").textContent = Object.keys(perFn).sort().map(function (k) {
+      return (k + " ").padEnd(18, ".") + " " + String(perFn[k][0]).padStart(4) + " pass" + (perFn[k][1] ? "  " + perFn[k][1] + " FAIL" : "");
+    }).join("\n") + "\n\n" + ms + " ms in this browser";
+    if (fails.length) {
+      var tb = document.querySelector("#fails tbody");
+      fails.slice(0, 200).forEach(function (f) {
+        var tr = document.createElement("tr");
+        f.forEach(function (cell) { var td = document.createElement("td"); td.textContent = cell; tr.appendChild(td); });
+        tb.appendChild(tr);
+      });
+      document.getElementById("fails").hidden = false;
+    }
+    window.SELFTEST = {cases: doc.cases.length, fails: fails.length, failList: fails.slice(0, 20)};
+  }).catch(function (e) {
+    var v = document.getElementById("verdict");
+    v.textContent = "[ ERROR ] could not load golden.json: " + e.message + " (open this page through a web server)";
+    v.className = "bad";
+    window.SELFTEST = {error: e.message};
+  });
+})();
+</script>
+</body></html>
