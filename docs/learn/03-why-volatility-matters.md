@@ -8,7 +8,7 @@ price, and SPY's price is only one of them:
 | SPY's price | about **5.6%** NAV move per 1% SPY move: its "leverage" today |
 | Implied volatility (the movement the market expects) | about **10%** NAV move per 1 point of volatility |
 | Interest rates | about **15%** NAV move per 1 percentage point of rates |
-| Time | about **-0.13%** of NAV per calendar day, if nothing else changes |
+| Time | about **-0.13%** of NAV per calendar day if SPY's price stays flat: half time decay, half carry (the forward price SPY is priced to reach slips by a day of interest). If SPY rises along that forward, a day costs about -0.05% |
 | SPY's dividends | small; the price already includes them |
 
 So XX can move a few percent on a day when the S&P stays flat, if the market changes its expectation of future

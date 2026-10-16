@@ -113,7 +113,7 @@ no spread, discrete dividends):
 | Elasticity ("leverage") | 5.50 - 5.77 (% NAV move per 1% SPY move) |
 | Vega | 9.2 - 10.1% of NAV per volatility point |
 | Rho | 14.5 - 15.4% of NAV per percentage point of rates |
-| Theta (spot, vol and curve held) | -0.13% of NAV per calendar day (convention: see F8) |
+| Theta (spot, vol and curve held) | -0.13% of NAV per calendar day: about half time decay, half carry; -0.05% if SPY drifts along its forward (see F8) |
 | Risk-neutral P(SPY above 995.01 at expiry) | 0.27 - 0.29 in the simple lognormal model (a market price, not a forecast); listed call spreads give about 0.39 (F10) |
 | Cash break-even for the option bought at the mark | SPY 1,044.7 - 1,052.3 at expiry |
 
@@ -136,19 +136,32 @@ unchanged; a 20-point S&P difference equals about 1.5% of option value. The plan
 too low. Data caveat: the local library stores SPY closes from a BATS export, not the official close; medians damp
 the noise.
 
-**F8. "Time decay" depends on the dividend convention.** With discrete dividends, holding SPY's price flat for a
-day costs about 0.0721 per option (2026-10-13); with a continuous dividend yield, about 0.0627. SPY's daily
-dividend accrual explains the 0.0094 gap: the discrete model expects SPY's price to rise between ex-dates and shows
-no drop on the ex-date; the continuous model shows a drop of about delta × dividend on each ex-date. Over a quarter
+**F8. "Time decay" has two parts, and its size depends on the dividend convention.** With discrete dividends,
+holding SPY's price flat for a day costs about 0.0721 per option on 2026-10-13 (-0.13% of NAV). About half is time
+decay (0.0368: the option's time value shrinks with the forward price held fixed) and half is carry (0.0353: with
+SPY flat, the forward price falls by a day of interest net of dividends). If SPY instead drifts along its forward,
+as the option price assumes on average, a day costs about -0.053% of NAV. With a continuous dividend yield the
+flat-SPY cost is about 0.0627; SPY's daily dividend accrual explains the 0.0094 gap. The conventions differ in
+timing, not in total. In the discrete model SPY's price drops by the dividend on the ex-date, and the option, which
+never receives it, keeps its value. The continuous model spreads the dividend across the quarter. Over a quarter
 both lose about the same (flat spot for 91 days: -5.78 vs -5.70 per option, audit A1). Hypothesis H5 tests which
 convention the vendor uses (first test: SPY ex-date 2026-12-18).
+
+*v0.1.1 correction (audit B10a).* v0.1.0 stepped one day across an ex-date without taking the dividend off SPY's
+price, so on the eve of an ex-date its theta showed a false gain. Projected with the 2026-10-15 inputs, the report
+for 2026-12-17 would have shown +1.24% of NAV per day; the corrected value is -0.14% (the day before: -0.13%).
+v0.1.1 also adds a dividend line to the daily attribution on ex-dates, so SPY's price drop does not read as a loss
+the option did not suffer.
 
 **F9. The pricing vendor discounts at about 0.5 points above Treasuries, at least short-dated.** XBOX's SPY box
 spread (expiry 2026-12-30), valued as of each file's effective date, implies a steady 4.62-4.65% (continuous),
 against a same-term Treasury zero rate of 4.12-4.17%: a gap of +47 to +50 bp. This one short-dated instrument does
 NOT show the rate at 3 years. If a similar gap applied to XX's option, the implied vol would run about 0.75-0.8
 points below the base case (the +50 bp column). Corrected after audit A1: the first version used the close date
-(false Friday dips) and compared a continuous rate with bond-equivalent yields.
+(false Friday dips) and compared a continuous rate with bond-equivalent yields. Since v0.1.1 the model table flags
+weaker box evidence: `box_leg_decimals` (2 decimals on the legs suggests traded prices, not the vendor's 4-decimal
+model) and `box_flow_day` (XBOX's shares changed). On 2026-10-15 both flags fire and the rate reads 4.48%, so that
+day says little about the vendor's rate (audit B10a).
 
 **F10. The listed S&P 500 options price more modest wins than the simple model; at 5× and 10× the two cannot be
 told apart.** Exploratory, one snapshot: delayed Cboe bid/ask quotes for the S&P 500 Dec-2029 calls (strikes

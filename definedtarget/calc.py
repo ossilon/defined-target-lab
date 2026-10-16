@@ -73,10 +73,14 @@ def render(res):
     for lvl, v in res["payoff"]:
         L.append(f"  {lvl:>12,}           {v:>10.2f}        {v / c.price:>6.2f}x")
     L += ["", f"Odds at the target date (lognormal, volatility {c.sigma:.1%}; read across the rows):",
-          "  assumption                          worthless  profit  doubles   p10    median   p90"]
+          "  assumption                    median path/yr: price  total   worthless  profit  doubles   p10    median"
+          "   p90"]
     for r in res["odds"]:
-        L.append(f"  {r['assumption']:<34}  {r['p_worthless']:>8.0%}  {r['p_profit']:>6.0%}  {r['p_double']:>7.0%}  "
+        L.append(f"  {r['assumption']:<30}  {r['median_price_cagr']:>20.1%}  {r['median_tr_cagr']:>6.1%}   "
+                 f"{r['p_worthless']:>8.0%}  {r['p_profit']:>6.0%}  {r['p_double']:>7.0%}  "
                  f"{r['multiple_p10']:>5.2f}x  {r['multiple_median']:>5.2f}x  {r['multiple_p90']:>5.2f}x")
+    L += ["", f"'Mean total return' is an average incl. dividends; the median path grows more slowly. Compare its "
+          f"price growth with the {res['strike_growth']:.1%}/yr needed just to reach the strike."]
     L += ["", "S&P levels use the central finish-line ratio (the effective trigger sits at about 9,955-10,040, "
           "depending on the history the estimate uses; central ~9,995)."]
     return "\n".join(L)

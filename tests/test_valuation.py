@@ -46,6 +46,32 @@ check("discrete and continuous dividend prices within 1% of each other",
 gap = v["theta_1d"] - vc["theta_1d"]
 check("discrete-dividend theta is more negative by roughly the daily dividend accrual (documented convention)",
       -0.02 < gap < -0.005, gap)
+
+# Theta split (audit B10a): decay holds the forward and discounting fixed; along the forward, only F is fixed.
+# With F and time fixed, Black-76 is linear in the discount factor, so theta_fwd = DF1 / DF x (price + decay) - price.
+F1_, DF1_, _, _ = valuation.forward(inputs(), as_of=AS_OF + timedelta(days=1))
+check("decay is negative and smaller than total theta; carry (the rest) is negative with SPY flat",
+      v["theta_1d"] < v["theta_decay_1d"] < 0, (v["theta_1d"], v["theta_decay_1d"]))
+check("theta along the forward = DF(next day) / DF(today) x (price + decay) - price (exact identity)",
+      abs(v["theta_fwd_1d"] - (DF1_ / v["df"] * (v["price"] + v["theta_decay_1d"]) - v["price"])) < 1e-12)
+check("theta along the forward is less negative than theta with SPY flat",
+      v["theta_1d"] < v["theta_fwd_1d"] < 0)
+
+# Theta across an ex-dividend date (audit B10a). SPY's December 2026 ex-date is Fri 2026-12-18. On Thu 12-17 the
+# one-day step must take the dividend off SPY's price; without that, theta showed a false gain of about delta x D.
+EVE, BEFORE = date(2026, 12, 17), date(2026, 12, 16)
+cv_eve, cv_before = curves.Curve(EVE, SLOPED), curves.Curve(BEFORE, SLOPED)
+t_eve = valuation.value(inputs(as_of=EVE, curve=cv_eve), 0.166)
+t_before = valuation.value(inputs(as_of=BEFORE, curve=cv_before), 0.166)
+check("the eve of an ex-date knows the dividend going ex overnight (~1.9 projected)",
+      1.8 < t_eve["ex_div_next_day"] < 2.1 and t_before["ex_div_next_day"] == 0.0, t_eve["ex_div_next_day"])
+check("theta on the eve of the ex-date is negative and within 10% of the day before's (no false jump)",
+      t_eve["theta_1d"] < 0 and abs(t_eve["theta_1d"] / t_before["theta_1d"] - 1) < 0.10,
+      (t_eve["theta_1d"], t_before["theta_1d"]))
+naive_f, naive_df, naive_tau, _ = valuation.forward(inputs(as_of=EVE, curve=cv_eve), as_of=EVE + timedelta(days=1))
+naive = valuation.pricing.call_price(naive_f, K, naive_df, naive_tau, 0.166) - t_eve["price"]
+check("the old step (SPY not reduced by the dividend) would have shown a gain of about delta x dividend",
+      abs(naive - t_eve["theta_1d"] - t_eve["delta"] * t_eve["ex_div_next_day"]) < 0.05 * naive, (naive, t_eve))
 raises("expiry before the valuation date is refused",
        lambda: valuation.Inputs(EXPIRY, 778.0, K, AS_OF, CV, HIST), "expiry must be after")
 raises("an unknown dividend mode is refused", lambda: inputs(mode="none"), "dividend mode")

@@ -70,9 +70,11 @@ The code here computes each fact from the issuer's public daily files and public
 - **The finish line sits near S&P 9,995**, not exactly 10,000, because SPY's price does not equal S&P/10. The
   range spans about 9,955-10,040, depending on how much history the estimate uses. (F7)
 - **A buyer at NAV on 2026-10-13 needs the S&P near 10,560 on the target date to recover the purchase price.** That
-  takes about 9.8% price growth a year. The report's simple odds model uses one volatility for every outcome. It
-  puts the risk-neutral chance of the options finishing above the strike near 29%, and at every assumed total
-  return up to 10% a year it has them more likely than not expire worthless. (daily report, F6)
+  takes about 9.8% price growth a year; reaching the strike alone takes 7.9%. The report's simple odds model uses
+  one volatility for every outcome and puts the risk-neutral chance of finishing above the strike near 29%. Its
+  "10% mean total return" row still leaves the options worthless 52% of the time: a mean is not the typical path,
+  and that row's median path grows only 7.4% a year in price. The options become more likely than not to pay off
+  only near a 12% mean total return (median price growth 9.4%). (daily report, F6)
 - **The listed S&P 500 options price the odds differently.** On 2026-10-13, call spreads on the Dec-2029 calls put
   the risk-neutral chance of finishing above 10,000 near 39% (simple model: 29%) and the chance of breaking even
   near 29% (simple model: 23%). The volatility skew causes the gap: it moves probability toward modest wins. For

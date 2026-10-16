@@ -54,6 +54,16 @@ check("closed-form median multiple matches simulation (0.5%)",
 check("closed-form 90th percentile multiple matches simulation (0.5%)",
       abs(r["multiple_p90"] / (float(np.quantile(nav, 0.9)) / 25.0) - 1) < 0.005)
 
+# Median-path growth (audit B10a): mu is a MEAN total return; the median path grows by (1 + mu) exp(-sigma^2/2) - 1
+rw, _, _ = an.outcome_table(25.0, 778.0, F, 0.048, sig, T, K, 0.48, 0.25, 0.0, mus=(None, 0.10))
+check("median price growth = (median S_T / spot)^(1/T) - 1, checked against the simulated median",
+      abs(rw[0]["median_price_cagr"] - ((float(np.median(s_t)) / 778.0) ** (1 / T) - 1)) < 2e-4, rw[0])
+check("median total return at a 10% mean = 1.10 x exp(-0.166^2 / 2) - 1 = 8.49%",
+      abs(rw[1]["median_tr_cagr"] - (1.10 * math.exp(-0.5 * sig * sig) - 1)) < 1e-12
+      and abs(rw[1]["median_tr_cagr"] - 0.0849) < 5e-5, rw[1]["median_tr_cagr"])
+check("the 10% row is labeled as a mean, and its median price growth is below 10%",
+      rw[1]["assumption"] == "mean total return 10%/yr" and rw[1]["median_price_cagr"] < 0.10)
+
 # Odds from call spreads (FINDINGS F10): on synthetic lognormal call prices, the call-spread method must recover the
 # true lognormal chances. Strikes and spread pairs match the listed S&P 500 Dec-2029 chain used in F10.
 check("a call spread's price / discounted strike gap is the chance: (60 - 40) / (100 x 0.8) = 0.25",

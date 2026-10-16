@@ -15,7 +15,7 @@ Run `py -m definedtarget calc` to see the payoff for any price you might pay. Th
 | Somewhat above 10,000 | Something, but less than the purchase price |
 | Well above 10,000 | About $0.46 more per SPY dollar (about $4.6 per 100 S&P points) |
 
-## Three numbers people mix up
+## Four numbers people mix up
 
 1. **The finish line.** The option pays only above SPY $995.01. SPY's price does not equal S&P/10, so the
    matching S&P level drifts. Our measurement puts it near **9,995**: between about 9,955 and 10,040, depending
@@ -24,7 +24,14 @@ Run `py -m definedtarget calc` to see the payoff for any price you might pay. Th
    S&P well above 10,000: near 10,560.
 3. **The odds.** Unless the S&P grows fast, the options more likely than not expire worthless. So the report's
    *median* outcome often reads "only the cash remains", while the *average* outcome can still look attractive:
-   a few large wins lift the average. The report's odds use one volatility for every outcome. On 2026-10-13, listed
+   a few large wins lift the average.
+4. **"10% a year" has two meanings.** The odds table's rows assume a *mean* total return. A volatile market's
+   typical (median) path grows more slowly than its mean: at about 16% volatility, a 10% mean gives a median path
+   of about 8.5% a year with dividends, or 7.4% in price alone (2026-10-13). Just reaching the strike took 7.9% a
+   year in price, so the 10% row still leaves the options worthless about half the time (52%). Compare the
+   table's *median path* columns with the growth the break-even table asks for.
+
+   The report's odds use one volatility for every outcome. On 2026-10-13, listed
    S&P 500 option prices put the chance of finishing above the strike about 10 points higher; for very large wins
    the two methods could not be told apart ([FINDINGS F10](../../FINDINGS.md)).
 

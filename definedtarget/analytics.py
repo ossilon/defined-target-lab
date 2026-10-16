@@ -8,8 +8,9 @@ Plain words
 - "Odds" need an assumption about how fast the market grows. There are two very different kinds:
   * risk-neutral: what the option PRICE implies. It assumes the market grows at the interest rate, because that
     is how the market prices options; it is a price, not a forecast.
-  * real-world: what happens if the market really grows at an expected total return mu you choose (e.g. 8%/yr
-    including dividends). We show a CURVE over several mu, never one number, because nobody knows mu.
+  * real-world: what happens if the market's MEAN total return is mu (e.g. 8%/yr including dividends). We show a
+    CURVE over several mu, never one number, because nobody knows mu. A mean is not the typical path: with ~16%
+    volatility the median path grows about 1.5 points a year slower, so each row also shows its median growth.
 - The model for real-world odds is the same lognormal one as Black-76, with the volatility set to the option's
   implied vol (ASSUMED; a choice, shown in the output). Under it the ETF's forward simply grows at mu instead of
   the interest rate: F_real = F_rn x exp((ln(1+mu) - r) T).
@@ -93,7 +94,11 @@ def outcome_table(price, spot, forward_rn, rate_cont, sigma, tau, strike, option
     """Odds and outcomes for a share bought at `price`, one row per growth assumption.
 
     mu=None is the risk-neutral row (forward grows at the rate). Each row: P(options finish worthless),
-    P(any profit), P(doubling), median and 10th/90th percentile value at the target date (as multiples of price).
+    P(any profit), P(doubling), median and 10th/90th percentile value at the target date (as multiples of price),
+    and the yearly growth of the MEDIAN path: price only (comparable with the growth the strike needs) and
+    total return. mu is a MEAN (arithmetic) total return: with volatility sigma the median path grows more slowly,
+    median total-return growth = (1 + mu) x exp(-sigma^2 / 2) - 1 (audit B10a: the 10% row's median price growth
+    is about 7.4%/yr, below the ~7.9%/yr needed just to reach the strike on 2026-10-13).
     """
     be1 = breakeven_spot(price, strike, options_per_share, cash_per_share, fee, tau, 1.0)
     be2 = breakeven_spot(price, strike, options_per_share, cash_per_share, fee, tau, 2.0)
@@ -102,9 +107,12 @@ def outcome_table(price, spot, forward_rn, rate_cont, sigma, tau, strike, option
         f = forward_rn if mu is None else real_world_forward(forward_rn, rate_cont, mu, tau)
         q = {p: nav_at_expiry(lognormal_quantile(f, sigma, tau, p), strike, options_per_share, cash_per_share,
                               fee, tau) / price for p in (0.10, 0.50, 0.90)}
+        mean_growth = math.exp(rate_cont) if mu is None else 1.0 + mu       # yearly growth factor of the mean
         rows.append({
-            "assumption": "risk-neutral (option price)" if mu is None else f"expected total return {mu:.0%}/yr",
+            "assumption": "risk-neutral (option price)" if mu is None else f"mean total return {mu:.0%}/yr",
             "mu": mu,
+            "median_price_cagr": (lognormal_quantile(f, sigma, tau, 0.5) / spot) ** (1.0 / tau) - 1.0,
+            "median_tr_cagr": mean_growth * math.exp(-0.5 * sigma * sigma) - 1.0,
             "p_worthless": 1.0 - lognormal_prob_above(f, strike, sigma, tau),
             "p_profit": lognormal_prob_above(f, be1, sigma, tau),
             "p_double": lognormal_prob_above(f, be2, sigma, tau),

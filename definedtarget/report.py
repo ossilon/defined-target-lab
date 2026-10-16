@@ -4,9 +4,12 @@ Inputs: the fund state table (reconcile.fund_state), the model table (marks.mode
 effective-trigger band (FINDINGS F7, from scripts/ratio_band.py). Output: Markdown, and the same page as HTML.
 
 Daily attribution ("what moved the price today"), per option on one SPY share, using YESTERDAY's Greeks:
-    change in mark ~ delta x dS + 1/2 gamma x dS^2 + vega x d(implied vol) + theta x days + rho x d(rate) + residual
+    change in mark ~ delta x dS + 1/2 gamma x dS^2 + vega x d(implied vol) + theta x days + rho x d(rate)
+                     + delta x (SPY dividend gone ex) + residual
 Because the model solves today's implied vol from today's mark, the vega term absorbs everything the other terms
 do not explain; the residual is only the higher-order and cross effects. Per XX share = per option x options per share.
+On an ex-dividend date SPY's price drops by the dividend, which the option never receives; the dividend term adds
+that back, so the market term is not read as a loss the option did not suffer.
 """
 import html
 import math
@@ -30,6 +33,9 @@ def attribution(prev, cur):
         "time (theta)": prev["theta_1d"] * days,
         "rates (rho)": prev["rho_1pct"] * (cur["zero_rate_T"] - prev["zero_rate_T"]) * 100.0,
     }
+    ex_div = cur.get("ex_div_today", 0.0) if hasattr(cur, "get") else 0.0
+    if ex_div == ex_div and ex_div:                                   # not NaN, not zero
+        parts["SPY dividend (ex-date)"] = prev["delta"] * ex_div
     total = cur["mark"] - prev["mark"]
     parts["residual"] = total - sum(parts.values())
     return total, parts, days
@@ -94,7 +100,15 @@ def build(state, model, spec, as_of=None):
     L.append(f"| SPY moves 1% | {m['xx_elasticity']:.1f}% (its leverage today) |")
     L.append(f"| implied volatility moves 1 point | {_pct(m['xx_vega_pct_nav_per_pt'])} |")
     L.append(f"| interest rates move 1 percentage point | {_pct(m['xx_rho_pct_nav_per_1pct'])} |")
-    L.append(f"| one calendar day passes (all else equal) | {_pct(m['xx_theta_pct_nav_per_day'], 2)} |")
+    decay = m["xx_theta_decay_pct_nav_per_day"]
+    L.append(f"| one calendar day passes, SPY unchanged | {_pct(m['xx_theta_pct_nav_per_day'], 2)} "
+             f"(time decay {_pct(decay, 2)}, carry {_pct(m['xx_theta_pct_nav_per_day'] - decay, 2)}) |")
+    L.append(f"| one calendar day passes, SPY drifts along its forward price | "
+             f"{_pct(m['xx_theta_fwd_pct_nav_per_day'], 2)} |")
+    L.append("")
+    L.append("*Time decay: the option's time value melts. Carry: with SPY flat, the forward price (what SPY is priced "
+             "to reach at the target date) slips by a day of interest net of dividends. The option's price assumes "
+             "SPY rises along that forward on average; the second line is one day's cost if it does exactly that.*")
     L.append("")
     L.append("## Break-even for a buyer today (hold to the target date)")
     L.append("")
@@ -117,12 +131,19 @@ def build(state, model, spec, as_of=None):
     L.append("")
     rows, _, _ = an.outcome_table(nav, m["spot"], m["forward"], m["zero_rate_T"], m["iv_disc_0bp"], tau,
                                   leg.strike.value, ops, cash_ps, fee)
-    L.append("| Assumption | Options worthless | Any profit | At least doubles | 10th pct | Median | 90th pct |")
-    L.append("|---|---|---|---|---|---|---|")
+    L.append("| Assumption | Median path: SPY price growth/yr | Median path: total return/yr | Options worthless | "
+             "Any profit | At least doubles | 10th pct | Median | 90th pct |")
+    L.append("|---|---|---|---|---|---|---|---|---|")
     for r in rows:
-        L.append(f"| {r['assumption']} | {_pct(r['p_worthless'], 0)} | {_pct(r['p_profit'], 0)} | "
+        L.append(f"| {r['assumption']} | {_pct(r['median_price_cagr'])} | {_pct(r['median_tr_cagr'])} | "
+                 f"{_pct(r['p_worthless'], 0)} | {_pct(r['p_profit'], 0)} | "
                  f"{_pct(r['p_double'], 0)} | {r['multiple_p10']:.2f}x | {r['multiple_median']:.2f}x | "
                  f"{r['multiple_p90']:.2f}x |")
+    L.append("")
+    L.append(f"*'Mean total return' is an average that includes dividends. The typical (median) path grows more "
+             f"slowly, so compare the median SPY price growth with the "
+             f"{an.required_growth(spx_now, TRIGGER_CENTRAL, tau):.1%}/yr the index needs just to reach the strike "
+             "(break-even table above).*")
     L.append("")
     L.append("*Each multiple divides the share's value at the target date by today's NAV. 0.01x means the options "
              "expired worthless and only the cash buffer remains: whenever 'options worthless' exceeds 50%, the "
@@ -144,11 +165,12 @@ def build(state, model, spec, as_of=None):
         L.append(f"Option mark {p['mark']:.4f} -> {m['mark']:.4f}; per XX share {total * ops:+.3f} "
                  f"({total / p['mark']:+.2%}).")
         L.append("")
-        L.append("| Cause | Per XX share | Share of the move |")
+        prev_nav = p["nav"]
+        L.append("| Cause | Per XX share | % of NAV |")
         L.append("|---|---|---|")
         for k, v in parts.items():
-            share = v / total if abs(total) > 1e-12 else float("nan")
-            L.append(f"| {k} | {v * ops:+.3f} | {share:+.0%} |")
+            L.append(f"| {k} | {v * ops:+.3f} | {v * ops / prev_nav:+.2%} |")
+        L.append(f"| **total** | **{total * ops:+.3f}** | **{total * ops / prev_nav:+.2%}** |")
         if s["flow_day"] or st.loc[max(prev_days)]["flow_day"]:
             L.append("")
             L.append("*A flow day falls in this window: the issuer may mark creation days differently "

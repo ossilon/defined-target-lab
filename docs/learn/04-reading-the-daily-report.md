@@ -11,13 +11,16 @@ option and writes a one-page report (Markdown and HTML) to `forward/daily/`. Sec
    the forward price, and the *risk-neutral* chance of finishing above the strike. Risk-neutral pricing assumes the
    market grows at the interest rate, so this chance measures what the option costs. It does not forecast.
 4. **How the share moves**: the Greeks per XX share in plain units: % of NAV per 1% SPY move, per volatility
-   point, per rate point and per day.
+   point, per rate point and per day. The day's cost splits into *time decay* and *carry*, and a second line shows
+   the cost if SPY rises along its forward price, as the option price assumes on average.
 5. **Break-even for a buyer today**: the SPY and S&P levels a buyer needs at the target date, and the yearly growth
    those levels require.
-6. **Odds and outcomes**: one row per assumption about the market's future return. Read across the rows; no row
-   gives "the" answer. Each multiple divides the value at the target date by today's NAV.
+6. **Odds and outcomes**: one row per assumption about the market's *mean* future return. Read across the rows; no
+   row gives "the" answer. Two columns show how fast each row's median path grows, so you can compare it with the
+   break-even growth. Each multiple divides the value at the target date by today's NAV.
 7. **What moved the price**: splits the day's change into market (delta, gamma), volatility (vega), time
-   (theta), rates (rho) and a small residual.
+   (theta), rates (rho) and a small residual, each in dollars per share and in % of NAV. On an SPY ex-dividend
+   date a dividend line adds back SPY's price drop, which the option never had a claim on.
 8. **Sources**: names the source of every input that day.
 
 ## What the report cannot tell you

@@ -1,6 +1,23 @@
 # Changelog
 
-## Unreleased
+## v0.1.1 (2026-10-17)
+
+Fixes from audit B10a (an independent review of the pricing core, which it reproduced to 1e-7), plus new captures.
+
+### Fixed
+- **Theta across an SPY ex-dividend date.** The one-day step now takes a dividend going ex overnight off SPY's
+  price. Before, the report for the eve of an ex-date would have shown a false gain (+1.24% of NAV for 2026-12-17,
+  projected; corrected: -0.14%). The daily attribution gains a dividend line on ex-dates. (FINDINGS F8)
+- **Odds rows relabeled.** "Expected total return" rows now read "mean total return", and two new columns show the
+  median path's yearly growth (price only and total return). On 2026-10-13 the 10% row's median path grows 7.4% a
+  year in price, below the 7.9% the strike needs. README, `docs/learn/02` and the calculator say so.
+
+### Changed
+- **Theta splits into time decay and carry**, with a second line for one day's cost if SPY rises along its forward
+  price (2026-10-13: -0.13% of NAV = -0.07% decay - 0.06% carry; along the forward -0.05%).
+- **Attribution in % of NAV, with a total row.** The "share of the move" column is gone: on flat days it divided
+  by a number near zero.
+- **Box-rate evidence flags** in the model table: `box_leg_decimals` and `box_flow_day`. (FINDINGS F9)
 
 ### Added
 - **Listed-option capture** (`forward/listed.py`, `scripts/capture_listed.py`): files each TradingView reply for the
@@ -8,6 +25,9 @@
   out-of-window reads flagged, and treats one-sided quotes as missing for that strike.
 - **Cboe FLEX execution reports** (`forward/cboe_flex.py`, `scripts/capture_flex.py`): downloads each trading day's
   report once and extracts the fund's own option trades, the raw material for measuring what creations cost.
+- **Cloud capture import** (`forward/cloud_import.py`, `scripts/import_captures.py`): copies files from a private
+  capture repository, refuses any file whose fingerprint no longer matches, and never overwrites a local copy. File
+  versions now sort by download time.
 
 ## v0.1.0 (2026-10-16)
 
