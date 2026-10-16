@@ -130,10 +130,11 @@ in the Bitcoin blockchain. To check it:
 2. Verify that file against `forward/predictions_2026-10-14.jsonl.ots` with the OpenTimestamps client
    (`ots verify`) or on opentimestamps.org. The proof shows the date of the Bitcoin block.
 
-Protocol P2 (clarifications that change no band) follows as line 22, appended on 2026-10-15 before any close from
-the test period was captured. A second proof, `forward/predictions_2026-10-15.jsonl.ots`, covers the
-first 22 lines (SHA-256 `a213dfabc265a43a3a88e8b5e96529dc402df60675fb8316d22b6127d45f339e`): repeat the steps with
-`[:22]` and the name `predictions_2026-10-15.jsonl`. Verdicts append below and never change earlier lines. The test
+Protocol P2 (clarifications that change no band) follows as line 22, appended on 2026-10-15; the ledger records the
+append before the first capture of a test-period close. A second proof, `forward/predictions_2026-10-15.jsonl.ots`,
+covers the first 22 lines (SHA-256 `a213dfabc265a43a3a88e8b5e96529dc402df60675fb8316d22b6127d45f339e`): repeat the
+steps with `[:22]` and the name `predictions_2026-10-15.jsonl`. That proof was stamped later the same day, so it
+shows that P2 existed by then, not that it came before the capture. Verdicts append below and never change earlier lines. The test
 `tests/test_ledger.py` pins both sets of bytes, and `.gitattributes` stops git from changing their line endings.
 
 ## How the model works (short version)

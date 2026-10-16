@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.0 (unreleased)
+## v0.1.0 (2026-10-16)
 
 The first release covers one fund, Roundhill XX (S&P 500® Target 10,000 2030 ETF).
 
@@ -26,6 +26,3 @@ The first release covers one fund, Roundhill XX (S&P 500® Target 10,000 2030 ET
 - **Your own closes**: the tracker reads `data/external/closes.csv`, prices every close it can and lists the rest.
 - **Citation**: `CITATION.cff` and a "How to cite" section in the README.
 - Audit A2 (independent model) reviewed the release; FINDINGS S3 lists its fixes.
-
-### Not included yet
-- Browser simulator, leverage tracker and predictor, paper portfolios (planned for v0.2).

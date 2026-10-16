@@ -3,6 +3,7 @@ message: "If you use this software or its findings, please cite it as below."
 title: "defined-target-lab: open tools to price, forward-test and simulate defined-target call ETFs"
 type: software
 version: 0.1.0
+date-released: 2026-10-16
 license: MIT
 authors:
   - name: "ossilon"
