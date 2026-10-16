@@ -1,4 +1,4 @@
-"""web/golden.json must equal a fresh run of scripts/make_golden.py (so the browser self-test checks today's engine),
+"""web/golden.js must equal a fresh run of scripts/make_golden.py (so the browser self-test checks today's engine),
 and the browser files stay small and self-contained (no outside scripts, fonts or images)."""
 import importlib.util
 import re
@@ -12,8 +12,8 @@ mg = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mg)
 
 doc = mg.build()
-on_disk = (REPO / "web" / "golden.json").read_text(encoding="utf-8")
-check("web/golden.json matches a fresh run of make_golden.py (re-run it after any engine change)",
+on_disk = (REPO / "web" / "golden.js").read_text(encoding="utf-8")
+check("web/golden.js matches a fresh run of make_golden.py (re-run it after any engine change)",
       on_disk == mg.dumps(doc))
 check("the golden file covers every engine function the page uses",
       {c["fn"] for c in doc["cases"]} >= {"callPrice", "impliedVol", "shareValue", "shareDelta", "leverage", "solveVol",
@@ -26,7 +26,7 @@ exported = set(re.findall(r"(\w+): \w+[,\s]", engine.split("var api = {", 1)[1].
 check("every function the golden file calls is exported by engine.js",
       {c["fn"] for c in doc["cases"]} <= exported, {c["fn"] for c in doc["cases"]} - exported)
 
-for page in sorted((REPO / "web").glob("*.html")) + [REPO / "web" / "engine.js"]:
+for page in sorted((REPO / "web").glob("*.html")) + [REPO / "web" / "engine.js", REPO / "web" / "golden.js"]:
     text = page.read_text(encoding="utf-8")
     outside = re.findall(r"""(?:src|href)\s*=\s*["']?(?:https?:)?//""", text) + re.findall(r"@import|url\(\s*['\"]?http", text)
     check(f"{page.name} loads nothing from other sites", not outside, outside)

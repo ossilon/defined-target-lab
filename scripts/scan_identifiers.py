@@ -40,8 +40,7 @@ IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 ALLOWED_IMAGE_DIRS = ("docs/img/",)
 # The frozen prediction ledger must be public (it proves pre-registration). It holds text only; the scan still
 # checks its contents like any text file.
-ALLOWED_DATA_FILES = {"forward/predictions.jsonl",
-                      "web/golden.json"}                # engine answers on synthetic inputs (scripts/make_golden.py)
+ALLOWED_DATA_FILES = {"forward/predictions.jsonl"}
 # Attribution: where the handle may stand, per file (the handle must follow this prefix directly).
 ATTRIBUTION_PREFIX = {"LICENSE": r"^Copyright \(c\) \d{4} ",
                       "CITATION.cff": r"^\s*-\s*(?:name|alias):\s*\"?",

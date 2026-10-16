@@ -18,16 +18,19 @@ td,th{padding:2px 6px;text-align:left;font-weight:normal;border-bottom:1px solid
 th{color:var(--amb)}
 </style></head><body><div class="wrap">
 <h1>&#9617;&#9618;&#9619; DEFINED-TARGET-LAB &#9619;&#9618;&#9617; ENGINE SELFTEST</h1>
-<pre class="dim">engine.js vs answers written by the Python engine (web/golden.json). Pass rule: |js - python| &lt;= abs + rel x |python|.</pre>
+<pre class="dim">engine.js vs answers written by the Python engine (web/golden.js). Pass rule: |js - python| &lt;= abs + rel x |python|.</pre>
 <div id="verdict">running...</div>
 <pre id="summary" class="dim"></pre>
 <table id="fails" hidden><thead><tr><th>fn</th><th>note</th><th>args</th><th>python</th><th>js</th></tr></thead><tbody></tbody></table>
 </div>
 <script src="engine.js"></script>
+<script src="golden.js"></script>
 <script>
 (function () {
   "use strict";
+  var OBJ = (window.GOLDEN && window.GOLDEN.objects) || {};
   function dec(x) {
+    if (typeof x === "string" && x.charAt(0) === "@") return OBJ[x.slice(1)];
     if (x === "NaN") return NaN;
     if (x === "Infinity") return Infinity;
     if (x === "-Infinity") return -Infinity;
@@ -48,19 +51,24 @@ th{color:var(--amb)}
     return got === exp;
   }
   function show(x) { return JSON.stringify(x, function (k, v) { return (typeof v === "number" && !isFinite(v)) ? String(v) : v; }); }
-  var t0 = performance.now();
-  fetch("golden.json", {cache: "no-store"}).then(function (r) { return r.json(); }).then(function (doc) {
+  var t0 = performance.now(), v = document.getElementById("verdict");
+  if (!window.GOLDEN || !window.DTL) {
+    v.textContent = "[ ERROR ] engine.js or golden.js did not load";
+    v.className = "bad";
+    window.SELFTEST = {error: "missing script"};
+    return;
+  }
+  (function (doc) {
     var fails = [], perFn = {};
     doc.cases.forEach(function (c) {
       var args = dec(c.args), exp = dec(c.expect), got;
       try { got = DTL[c.fn].apply(null, args); } catch (e) { got = "ERROR " + e.message; }
-      var ok = close(got, exp, c.tol);
+      var ok = close(got, exp, c.tol || doc.tol);
       perFn[c.fn] = perFn[c.fn] || [0, 0];
       perFn[c.fn][ok ? 0 : 1]++;
       if (!ok) fails.push([c.fn, c.note || "", show(args), show(exp), show(got)]);
     });
     var ms = (performance.now() - t0).toFixed(0);
-    var v = document.getElementById("verdict");
     v.textContent = fails.length ? "[ " + fails.length + " FAIL ] of " + doc.cases.length + " cases"
                                  : "[ ALL PASS ] " + doc.cases.length + " cases, 0 FAIL";
     if (fails.length) v.className = "bad";
@@ -77,12 +85,7 @@ th{color:var(--amb)}
       document.getElementById("fails").hidden = false;
     }
     window.SELFTEST = {cases: doc.cases.length, fails: fails.length, failList: fails.slice(0, 20)};
-  }).catch(function (e) {
-    var v = document.getElementById("verdict");
-    v.textContent = "[ ERROR ] could not load golden.json: " + e.message + " (open this page through a web server)";
-    v.className = "bad";
-    window.SELFTEST = {error: e.message};
-  });
+  })(window.GOLDEN);
 })();
 </script>
 </body></html>
