@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Listed-option capture** (`forward/listed.py`, `scripts/capture_listed.py`): files each TradingView reply for the
+  listed S&P 500 Dec-2029 calls, checks protocol P2's read window across daylight saving and holidays, keeps
+  out-of-window reads flagged, and treats one-sided quotes as missing for that strike.
+- **Cboe FLEX execution reports** (`forward/cboe_flex.py`, `scripts/capture_flex.py`): downloads each trading day's
+  report once and extracts the fund's own option trades, the raw material for measuring what creations cost.
+
 ## v0.1.0 (2026-10-16)
 
 The first release covers one fund, Roundhill XX (S&P 500® Target 10,000 2030 ETF).

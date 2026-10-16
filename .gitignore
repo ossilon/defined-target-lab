@@ -1,4 +1,4 @@
-# Keep all data out of the repository: TradingView licenses its data for display only, and Roundhill's site terms
+# Keep all data out of the repository (data/tmp_chain_reply.json, the capture's inbox, included): TradingView licenses its data for display only, and Roundhill's site terms
 # forbid redistributing or storing its files without written permission. data/README.md names each file's source.
 data/*
 !data/README.md
@@ -8,6 +8,7 @@ data/*
 PLAN.md
 PROMPT.md
 BACKLOG.md
+B20_FABLE_REVIEW.md
 docs/README_DRAFT.md
 forward/hypotheses_draft.json
 forward/hypotheses_draft_v1.json
