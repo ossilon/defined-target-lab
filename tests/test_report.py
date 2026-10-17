@@ -66,6 +66,27 @@ check("report has the attribution section, in % of NAV with a total row",
       "What moved the price since 2026-10-12" in page and "| Cause | Per XX share | % of NAV |" in page
       and "**total**" in page and "Share of the move" not in page)
 check("report carries the not-investment-advice line", "not investment advice" in page)
+import math  # noqa: E402
+import tempfile  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+with tempfile.TemporaryDirectory() as tmp:
+    Path(tmp, "CITATION.cff").write_text('repository-code: "https://github.com/Some-Owner/some-repo"\n', encoding="utf-8")
+    check("simulator address comes from CITATION.cff (owner lower-cased, /web/ appended)",
+          report.pages_url(tmp) == "https://some-owner.github.io/some-repo/web/", report.pages_url(tmp))
+    check("no CITATION.cff: no simulator link", report.pages_url(Path(tmp) / "missing") is None)
+link = report.simulator_link(m1, state.iloc[1], m1["as_of"], "https://x.github.io/r/web/")
+params = dict(kv.split("=") for kv in link.split("#", 1)[1].split("&"))
+check("simulator link puts the inputs after '#' (never sent to a server)",
+      link.startswith("https://x.github.io/r/web/#") and {"paid", "spy", "spx", "date", "rate", "q", "cash",
+                                                          "units"} <= set(params), link)
+q = float(params["q"]) / 100
+fwd = float(params["spy"]) * math.exp((float(params["rate"]) / 100 - q) * m1["tau"])
+check("the link's continuous dividend yield reproduces the model's forward (within 0.01%)",
+      abs(fwd / m1["forward"] - 1) < 1e-4, (fwd, m1["forward"]))
+check("the report ends with the simulator link when CITATION.cff names the repository",
+      "Explore this close in the browser simulator" in page and "github.io/" in page and "#paid=" in page)
 html = report.to_html(page, "test")
+check("the HTML report makes the link clickable", '<a href="https://' in html)
 check("HTML version has tables and a dark-mode style", "<table>" in html and "prefers-color-scheme:dark" in html)
 check("HTML escapes text (no raw '<' from content)", "<script" not in html)

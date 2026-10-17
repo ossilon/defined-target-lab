@@ -88,17 +88,17 @@ The code here computes each fact from the issuer's public daily files and public
   and solves 1 million implied volatilities in 0.34 s (median of 7 runs; single-threaded numba 0.68, Python 3.13).
   The remaining cores stay free; v0.1 does not run in parallel.
 
-## v0.1
+## Tools
 
 | Tool | Command (from the repository folder) |
 |---|---|
+| **Browser simulator** (v0.2): a date × S&P grid of one share's P/L, value or leverage, with the odds of finishing above each level, volatility scenarios, and presets for XX, a listed S&P 500 call or any fund you describe. No install; nothing you type leaves your browser. | open [web/index.html](web/index.html) in a browser ([how to read it](docs/learn/05-the-simulator.md)); [web/selftest.html](web/selftest.html) checks its maths against the Python engine |
 | **"What must the S&P do?" calculator**: computes break-evens, a payoff table and odds across growth assumptions. Runs without downloaded data. | `py -m definedtarget calc --price 25 --spot 760 --iv 0.17 --rate 0.048 --as-of 2026-10-01` |
 | **Daily tracker / forward test**: downloads the issuer's public files, checks the accounting, prices the option and writes a one-page report. A new copy prices each close from the first day it runs; to price earlier closes, add SPY's past closes ([data/README.md](data/README.md)) | `py -m definedtarget daily` then `py -m definedtarget report` |
 | **Prospectus illustration**: recomputes the prospectus table | `py -m definedtarget prospectus` |
 | **Pre-registered predictions**: a hash-chained ledger of testable claims about XX's behavior | [forward/HYPOTHESES.md](forward/HYPOTHESES.md) |
 | **Plain-English explainers** | [docs/learn/](docs/learn/01-what-is-a-call.md) |
 
-Next: v0.2 adds a browser simulator that needs no install.
 
 ## Install and run
 

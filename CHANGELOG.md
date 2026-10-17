@@ -13,7 +13,14 @@
   leverage, with the odds of finishing above each level; a summary (max loss, break-even, growth needed, leverage,
   one day's cost split into decay and carry); volatility shift and crash/crush presets; volatility that follows the
   S&P; the odds table with median-path growth. Inputs can arrive after a `#` in the link (never sent to a server).
-  No libraries, no requests, no storage; 41 KB (about 15 KB compressed).
+  No libraries, no requests, no storage.
+- **More of the simulator**: an ASCII graph mode; presets for a listed S&P 500 Dec-2029 10,000 call (per contract)
+  and for any fund pasted as a short spec (calls or puts, bought or sold); the ETF and S&P fields fill each other;
+  odds rows up to a 24% mean total return plus a custom row checked against history (FINDINGS F13,
+  `scripts/history_windows.py`); a link at the end of the daily report opens the simulator with that close's inputs.
+  Volatility is solved on the rising side of the value curve, so call spreads work. Scripts load with a version tag,
+  so browsers never mix an old engine with a new page.
+- **docs/learn/05**: how to read the simulator.
 - **Volatility slide measured** (FINDINGS F12, `scripts/measure_vol_slide.py`): the 3-year vol at XX's strike rises
   about 1 point per 10% S&P fall, a fifth of VIX1Y's 4.6.
 

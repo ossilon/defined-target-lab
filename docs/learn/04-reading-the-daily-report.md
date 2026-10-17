@@ -31,3 +31,5 @@ option and writes a one-page report (Markdown and HTML) to `forward/daily/`. Sec
 - What happens after 2030. The fund will roll into a new target and date under a rule it has not published.
 
 This report provides general information only. It gives no investment advice.
+
+Next: [5. The browser simulator](05-the-simulator.md).

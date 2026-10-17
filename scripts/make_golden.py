@@ -128,6 +128,12 @@ def build():
         add("solveVol", [XX, nav, 778.01, MKT], sim.solve_vol(fp, nav, 778.01, mp), {"rel": 1e-9, "abs": 1e-11},
             "NaN when the price is below cash" if nav < 0.25 else "")
     add("solveVol", [SHORT_VOL, 90.0, 778.01, MKT], float("nan"), note="short volatility: type a vol in")
+    sp_, sm_ = fund_py(SPREAD), mkt_py(MKT)
+    for true_vol in (0.12, 0.166, 0.30):
+        price = sim.share_value(sp_, 778.01, 0.0, true_vol, sm_)
+        add("solveVol", [SPREAD, price, 778.01, MKT], sim.solve_vol(sp_, price, 778.01, sm_), {"rel": 1e-9, "abs": 1e-11},
+            "call spread: value peaks then falls with vol")
+    add("solveVol", [SPREAD, 500.0, 778.01, MKT], float("nan"), note="call spread: above its peak value")
     for target in (26.51, 53.02, 150.0):
         add("levelForValue", [XX, target, MKT], sim.level_for_value(fp, target, mp), note="XX")
     sp, sm = fund_py(SPREAD), mkt_py(MKT)

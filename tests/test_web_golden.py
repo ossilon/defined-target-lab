@@ -31,6 +31,10 @@ for page in sorted((REPO / "web").glob("*.html")) + sorted((REPO / "web").glob("
     outside = re.findall(r"""(?:src|href)\s*=\s*["']?(?:https?:)?//""", text) + re.findall(r"@import|url\(\s*['\"]?http", text)
     check(f"{page.name} loads nothing from other sites", not outside, outside)
 check("engine.js stays small (< 40 KB)", len(engine.encode()) < 40_000, len(engine.encode()))
+tags = {name: set(re.findall(r'src="(?:engine|app|golden)\.js\?v=([^"]+)"', (REPO / "web" / name).read_text(encoding="utf-8")))
+        for name in ("index.html", "selftest.html")}
+check("both pages load the scripts with one shared version tag (so browsers never mix an old engine with new pages)",
+      len(tags["index.html"] | tags["selftest.html"]) == 1, tags)
 page_bytes = sum((REPO / "web" / f).stat().st_size for f in ("index.html", "app.js", "engine.js"))
 check("the simulator page loads under 60 KB in total (index.html + app.js + engine.js)", page_bytes < 60_000, page_bytes)
 app = (REPO / "web" / "app.js").read_text(encoding="utf-8")

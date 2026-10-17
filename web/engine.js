@@ -140,9 +140,15 @@
   function volAt(base, shift, slide, S, S0) {
     return Math.max(base + shift + slide * Math.log(S / S0) / LN_09, VOL_FLOOR);
   }
-  function solveVol(fund, price, S, m) {
-    var lo = 1e-4, hi = 3.0;
-    if (!(shareValue(fund, S, 0, lo, m) - price < 0 && 0 < shareValue(fund, S, 0, hi, m) - price)) return NaN;
+  function solveVol(fund, price, S, m) {             // rising side of the value-vs-vol curve (see sim.solve_vol)
+    var lo = 1e-4, hi = 3.0, N = 60, best = -Infinity, k = 0, vals = [], g;
+    for (var n = 0; n <= N; n++) {
+      g = lo * Math.pow(hi / lo, n / N);
+      vals.push(shareValue(fund, S, 0, g, m));
+      if (vals[n] > best) { best = vals[n]; k = n; }
+    }
+    hi = lo * Math.pow(3.0 / lo, k / N);
+    if (!(vals[0] - price < 0 && 0 < best - price)) return NaN;
     for (var i = 0; i < 200; i++) {
       var mid = 0.5 * (lo + hi);
       if (shareValue(fund, S, 0, mid, m) < price) lo = mid; else hi = mid;

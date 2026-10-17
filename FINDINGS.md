@@ -229,3 +229,27 @@ the measured +1.0 point, and only 10.0% if XX's vol jumped like VIX1Y (+4.6). Th
 assumed (Treasury zero curve; SPY's trailing 12-month yield), and F11 saw the vendor's marks move the other way
 over ten closes. Data stay local (TradingView quotes and Cboe's VIX1Y file); only these statistics are published.
 Code: `scripts/measure_vol_slide.py` (the VIX1Y rows, from your own closes and Cboe's free file).
+
+**F13. Over stretches as long as XX's life, the S&P has cleared XX's break-even about a third to a half of the
+time.** Measured 2026-10-17 for the simulator's odds rows (`scripts/history_windows.py`, Shiller's monthly data).
+Every 39-month window (3¼ years, one starting each month), annualized:
+
+| Start | Windows (separate) | Total return: median / top 25% / top 10% / top 5% / best | Price only: median / top 10% |
+|---|---|---|---|
+| 1871 | 1,831 (~46) | 10.0% / 16.1% / 22.5% / 26.6% / 40.2% | 5.6% / 17.5% |
+| 1950 | 883 (~22) | 11.7% / 16.5% / 21.5% / 26.0% / 33.5% | 8.8% / 17.9% |
+| 1988 | 427 (~10) | 12.4% / 16.4% / 21.4% / 27.0% / 33.5% | 10.2% / 19.4% |
+
+The best window began in mid-1926 and ended just before the 1929 crash. A check on the daily S&P 500 total-return
+index (1988-2026) gives 12.5% / 16.6% / 22.1% / 27.0% / 34.4%, close to Shiller's monthly figures.
+
+Share of windows whose price growth cleared XX's bars (2026-10-13 example): reaching the strike (7.9%/yr) 41% since
+1871, 56% since 1950, 69% since 1988; breaking even at NAV (9.8%/yr) 33%, 43%, 52%; the 16% row's median path
+(13.3%/yr) 20%, 23%, 27%. The option price implies a 23% chance of profit, below the historical shares since 1950:
+stocks have paid a reward for their risk, and option prices do not include it.
+
+Caveats: the windows overlap (about 46 separate ones since 1871, 22 since 1950, 10 since 1988), so these shares are
+rough. They ignore today's starting valuation; high valuations have been followed by lower returns, and the planned
+history study conditions on it (CAPE). Shiller's price is a monthly average, which smooths the windows a little.
+The simulator's odds rows run to a 24% mean total return (its median path is about history's top 10%), plus a custom
+row that flags inputs beyond history's top 5% and its best.

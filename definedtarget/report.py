@@ -14,8 +14,34 @@ that back, so the market term is not read as a loss the option did not suffer.
 import html
 import math
 import re
+from pathlib import Path
 
 from . import analytics as an
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+def pages_url(repo_root=REPO):
+    """The browser simulator's public address, worked out from CITATION.cff's repository-code
+    (https://github.com/<owner>/<repo> -> https://<owner>.github.io/<repo>/web/). None if it cannot be found."""
+    path = Path(repo_root) / "CITATION.cff"
+    if not path.exists():
+        return None
+    m = re.search(r'^repository-code:\s*"?https://github\.com/([^/\s"]+)/([^/\s"]+?)"?\s*$',
+                  path.read_text(encoding="utf-8"), re.M)
+    return f"https://{m[1].lower()}.github.io/{m[2]}/web/" if m else None
+
+
+def simulator_link(m, s, as_of, base):
+    """A link that opens the browser simulator with this close's inputs. They sit after the '#', which browsers
+    never send to the server. The dividend yield is the continuous yield that reproduces the model's forward."""
+    q = m["zero_rate_T"] - math.log(m["forward"] / m["spot"]) / m["tau"]
+    p = {"paid": f"{s['nav_published']:.2f}", "spy": f"{m['spot']:.2f}"}
+    if m["spx"] == m["spx"]:
+        p["spx"] = f"{m['spx']:.2f}"
+    p.update(date=str(as_of), rate=f"{m['zero_rate_T'] * 100:.3f}", q=f"{q * 100:.3f}",
+             cash=f"{s['cash_per_share']:.4f}", units=f"{m['options_per_share']:.4f}")
+    return base + "#" + "&".join(f"{k}={v}" for k, v in p.items())
 
 # Effective S&P trigger band (FINDINGS F7, 2026-10-14). Central value and the widest/narrowest history ranges.
 TRIGGER_CENTRAL = 9995.0
@@ -182,6 +208,12 @@ def build(state, model, spec, as_of=None):
     L.append(f"- Rates: {m['curve_source']}. Dividends: the model projects SPY's history at 5%/yr growth (ASSUMED).")
     L.append("- Model: Black-76 on the dividend-adjusted forward (FINDINGS F6-F9; audited). General information "
              "only; not investment advice; not affiliated with the fund's issuer or index provider.")
+    base = pages_url()
+    if base:
+        L.append("")
+        L.append("## Explore this close in the browser simulator")
+        L.append("")
+        L.append(simulator_link(m, s, as_of, base))
     return "\n".join(L) + "\n"
 
 
@@ -189,6 +221,8 @@ def to_html(markdown, title):
     """Small Markdown-to-HTML converter for the report's own subset (headings, tables, bullets, bold, italics)."""
     def inline(t):
         t = html.escape(t)
+        if t.startswith("https://") and " " not in t:                    # a bare link line: make it clickable
+            return f'<a href="{t}">{t}</a>'
         t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
         return re.sub(r"\*(.+?)\*", r"<em>\1</em>", t)
 

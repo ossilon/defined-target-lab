@@ -105,10 +105,23 @@ def vol_at(base, shift, slide, S, S0):
     return max(base + shift + slide * math.log(S / S0) / LN_09, VOL_FLOOR)
 
 
+SOLVE_GRID = 60
+
+
 def solve_vol(fund, price, S, m, lo=1e-4, hi=3.0):
-    """Volatility at which one share today is worth `price`. NaN if no answer in [lo, hi] (or vol does not raise
-    the value: a fund that is short volatility needs a typed-in vol)."""
-    f_lo, f_hi = share_value(fund, S, 0.0, lo, m) - price, share_value(fund, S, 0.0, hi, m) - price
+    """Volatility at which one share today is worth `price`. NaN if no answer (a fund that is short volatility needs
+    a typed-in vol).
+
+    A single bought option gains value with every extra point of volatility, but a call spread does not: its value
+    rises, peaks, then falls (at extreme volatility both calls are worth about the same). So the search first finds
+    the volatility with the highest value on a log grid, then bisects on the rising side below it. Where a price has
+    two answers (one each side of the peak), this returns the lower one.
+    """
+    grid = [lo * (hi / lo) ** (i / SOLVE_GRID) for i in range(SOLVE_GRID + 1)]
+    vals = [share_value(fund, S, 0.0, g, m) for g in grid]
+    k = max(range(len(grid)), key=vals.__getitem__)
+    hi = grid[k]
+    f_lo, f_hi = vals[0] - price, vals[k] - price
     if not (f_lo < 0.0 < f_hi):
         return float("nan")
     for _ in range(200):

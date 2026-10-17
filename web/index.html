@@ -58,6 +58,11 @@ tr.fin td{text-align:left;color:var(--amb);padding:1px 5px;font-size:11px;white-
 #odds tr{cursor:pointer} #odds tr.on td{background:var(--faint);color:var(--amb)}
 .note{color:var(--dim);font-size:11px;margin-top:6px}
 .err{color:var(--red)}
+textarea{width:100%;background:#020;color:var(--fg);border:1px solid var(--dim);font:12px/1.35 inherit;font-family:inherit;padding:6px;margin-top:6px}
+input:disabled{opacity:.45}
+#graph{line-height:1.15;color:var(--dim);padding:4px 0}
+#graph .g0{color:#7fae8c} #graph .g1{color:var(--dim)} #graph .g2{color:#9dff9d} #graph .g3{color:var(--fg);text-shadow:0 0 5px rgba(51,255,102,.6)}
+#graph .gf{color:var(--amb)} #graph .gp{color:var(--red)}
 .nfowrap{text-align:center;margin-top:16px} .nfowrap pre{display:inline-block;text-align:left;color:var(--dim);font-size:11px}
 a{color:var(--amb)}
 </style></head><body><div class="wrap">
@@ -92,7 +97,13 @@ a{color:var(--amb)}
 <label class="f" title="Yearly fee, paid by selling options (conservative)"><i>FEE %</i><input type="text" id="fee" inputmode="decimal"></label>
 <label class="f"><i>TARGET DATE</i><input type="date" id="target"></label>
 <label class="f" title="The S&P level the strike corresponds to on the target date (FINDINGS F7: ~9,995 for XX)"><i>S&amp;P FINISH LINE</i><input type="text" id="finish" inputmode="decimal"></label>
+<label class="f" id="ratioField" title="S&P points per ETF dollar today. Typing the ETF fills in the S&P with it, and the other way round"><i>S&amp;P PER <span id="ratioLbl">SPY</span> TODAY</i><input type="text" id="ratio" inputmode="decimal"></label>
 </div></details>
+<div id="specBox" hidden>
+<div class="note">Describe any defined-target fund: option legs per share (kind call/put, sign 1 bought / -1 sold, strike in ETF dollars, units = one-share options per fund share), cash per share, fee %/yr, the target date, and S&amp;P points per ETF dollar on that date.</div>
+<textarea id="spec" rows="9" spellcheck="false" aria-label="Fund spec (JSON)"></textarea>
+<div class="keys"><button class="k" type="button" id="specApply">LOAD SPEC</button><span class="note" id="specNote"></span></div>
+</div>
 <div class="note" id="inNote"></div>
 </div>
 
@@ -109,19 +120,22 @@ a{color:var(--amb)}
 
 <div class="box"><h2 id="gridTitle">[ P/L PER SHARE // DATE x S&amp;P ]</h2>
 <div class="keys"><span class="lbl">VIEW</span><span id="views"></span>
+<span class="lbl" style="margin-left:10px">MODE</span><span id="modes"></span>
 <span class="lbl" style="margin-left:10px">RANGE</span><input type="range" id="range" min="10" max="60" step="5" value="40" style="width:120px" aria-label="Range of S&P moves"><b id="rangeOut" style="font-weight:normal"></b></div>
-<div class="gridwrap"><table id="grid"></table></div>
+<div class="gridwrap"><table id="grid"></table><pre id="graph" hidden></pre></div>
 <div id="readout">&gt; hover or tap a cell</div>
 <div class="note" id="gridNote"></div>
 </div>
 
 <div class="box"><h2>[ ODDS AT THE TARGET DATE ]</h2>
 <div class="gridwrap"><table id="odds"></table></div>
+<div class="row">CUSTOM MEAN TOTAL RETURN % <input type="text" id="customMu" inputmode="decimal" style="width:52px"> <span id="customNote" style="color:var(--amb)"></span></div>
 <div class="note" id="oddsNote"></div>
+<div class="note">History (S&amp;P 500 incl. dividends, every 3&frac14;-year stretch since 1871, Shiller data; FINDINGS F13): median 10.0%/yr &#9474; top 25% 16.1% &#9474; top 10% 22.5% &#9474; top 5% 26.6% &#9474; best 40.2% (1926-29). Since 1950: median 11.7%, top 10% 21.5%. Overlapping stretches: about 46 separate ones since 1871.</div>
 </div>
 
 <div class="nfowrap"><pre id="nfo"></pre></div>
 </div>
-<script src="engine.js"></script>
-<script src="app.js"></script>
+<script src="engine.js?v=0.2.0-w3"></script>
+<script src="app.js?v=0.2.0-w3"></script>
 </body></html>

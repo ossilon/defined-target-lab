@@ -85,6 +85,19 @@ check("a call spread pays at most the strike gap at the target date",
 check("a call spread's break-even lies between its strikes",
       900.0 < sim.level_for_value(spread, v_sp, M) < 1100.0)
 check("a target beyond the cap is out of reach (NaN)", math.isnan(sim.level_for_value(spread, 250.0, M)))
+hump = [sim.share_value(spread, S0, 0.0, s, M) for s in (0.1, 0.5, 3.0)]
+check("a call spread's value rises then falls as volatility grows (why the solver looks for the peak)",
+      hump[0] < hump[1] > hump[2], hump)
+for true_vol in (0.12, 0.166):
+    got = sim.solve_vol(spread, sim.share_value(spread, S0, 0.0, true_vol, M), S0, M)
+    check(f"a call spread priced at {true_vol:.1%} vol solves back to it (rising side of the hump)",
+          abs(got - true_vol) < 1e-9, got)
+p30 = sim.share_value(spread, S0, 0.0, 0.30, M)
+got = sim.solve_vol(spread, p30, S0, M)
+check("past the peak, a price has two vols; the solver returns the lower one, which reprices exactly",
+      got < 0.30 and abs(sim.share_value(spread, S0, 0.0, got, M) - p30) < 1e-9, got)
+check("a price above the spread's peak value has no vol (NaN)",
+      math.isnan(sim.solve_vol(spread, max(hump) * 1.5, S0, M)))
 pp = sim.Fund((sim.Leg("put", 1, 700.0, 1.0), sim.Leg("call", 1, 900.0, 1.0)))
 mean = sim.forward_at_target(S0, M)
 check("strangle: worthless only between the put and call strikes",
