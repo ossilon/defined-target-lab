@@ -282,8 +282,8 @@ What it teaches, for the v0.3 engine:
   starting a GPU job and copying results back costs more than the work.
 - 64-bit math cost only about 4x here, not the 64x the card's arithmetic rate suggests: this job spends its time
   moving random numbers through the card's memory, not on arithmetic. A kernel that makes its random numbers
-  inside (the planned counter-based Philox) avoids that traffic, so v0.3 targets are set on that design, and the
-  32-bit vs 64-bit gap must be measured again there.
+  inside (the planned counter-based Philox) avoids that traffic, so v0.3 sets its targets on that design and
+  measures the 32-bit vs 64-bit gap again there.
 - Sums of millions of 32-bit numbers were accumulated in 64-bit; the 32-bit results agree with the exact value as
   closely as the 64-bit ones.
 
@@ -294,8 +294,8 @@ Monte Carlo error, not path by path.
 **F15. Real history's shape lowers XX's model value by 13-24% against the simple model at the same daily
 volatility, and one era's history understated the next era's drawdowns.** Measured 2026-10-17
 (`scripts/bootstrap_study.py`, montecarlo engine v0.3 steps 1-5; S&P 500 price closes 1950-01-03 to 2026-10-09;
-Ken French's daily US market total return 1926-07-01 to 2026-08-31; 1 million paths per row; the study's outputs were
-written into the script before the first run, and one diagnostic column, "value, E = F", was added after it).
+Ken French's daily US market total return 1926-07-01 to 2026-08-31; 1 million paths per row; the script fixed the
+study's outputs before the first run, and one diagnostic column, "value, E = F", came after it).
 
 Out of sample (build 1950-1999, test 2000-2026, 814-session windows, about 8 separate ones):
 
@@ -346,7 +346,7 @@ core clock 15-30 MHz lower: a small warm-up effect, no throttling. A CPU recompu
 found 0 mismatches (bootstrap bit for bit; lognormal within 2.2e-16). Over 460 million lognormal paths, P(touch +28%
 before expiry) = 0.502710 +/- 0.000023 against the exact 0.502716.
 
-What it teaches: the bootstrap is mostly integer work (Philox) and table lookups, where a gaming GPU is very fast;
+What it teaches: the bootstrap is mostly integer work (Philox) and table lookups, where a gaming GPU excels;
 the lognormal turns every random number into a normal with about 30 64-bit operations, and this card does 64-bit
 arithmetic at 1/64 of its 32-bit rate, so that kernel is limited by arithmetic and draws only about half the card's
 power. A 32-bit lognormal kernel is the next speed step, with its accuracy measured against the 64-bit one. GPU and

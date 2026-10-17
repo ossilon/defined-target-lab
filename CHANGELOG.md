@@ -27,9 +27,9 @@
   with its arguments, seeds, settings, the SHA-256 and size of each input file, the SHA-256 of every code file, the
   library versions and the SHA-256 of everything it printed. A seeded study run again on the same inputs and code
   must print the same output (`manifest.same_output`); the four seeded studies reproduce FINDINGS F15, F17, F18 and
-  F19 and their manifests are published. File names only, the date only, no folders or machine names.
+  F19, and the repository publishes their manifests. File names only, the date only, no folders or machine names.
 - The identifier scan now catches a Windows home path written with doubled backslashes (as JSON writes it), accepts
-  the forecast log and run manifests (their contents are still scanned), and accepts "analyses" (the American plural
+  the forecast log and run manifests (it still scans their contents), and accepts "analyses" (the American plural
   of "analysis"). `slide_rule_test.py` prints the VIX1Y file's fetch date, not its time.
 - **`definedtarget.montecarlo`**, the start of a Monte Carlo engine that imports nothing else from the package, so
   other projects can use it unchanged. Step 1: counter-based random numbers (Philox4x32-10) addressed by (seed, path,
@@ -48,7 +48,7 @@
 - **Lognormal paths** (`montecarlo.paths`, step 3) on any time grid, including the real trading calendar
   (`times_from_dates`). Each path reports, in one causal pass: the end level, the highest close, the drawdown at the
   end, the maximum drawdown, the first close at a barrier, the exact chance that the continuous path touched the
-  barrier between closes (Brownian bridge), and levels at checkpoints. Judged by exact formulas, all within 3 SE:
+  barrier between closes (Brownian bridge), and levels at checkpoints. Exact formulas judge it, all within 3 SE:
   the end distribution on 814 unequal calendar steps, the martingale property at 11 checkpoints, Spitzer's identity
   for the expected highest close and (by time reversal) the drawdown at the end, and the reflection principle for a
   continuous touch (+28% before expiry: exact 0.54079). Two approximations sit within allowances fixed in advance:
@@ -64,7 +64,7 @@
 - **History bootstrap** (`montecarlo.bootstrap`, step 5): the circular stationary bootstrap (Politis and Romano,
   1994) builds paths from blocks of real history with random lengths of a chosen mean; several columns travel
   together; `equal_moments` gives history any chosen mean and spread, so a bootstrap and a lognormal with the same
-  inputs differ only in shape. Judged on synthetic history with fat tails and strong serial correlation: every row
+  inputs differ only in shape. Tests on synthetic history with fat tails and strong serial correlation check: every row
   equally likely at every step, geometric block starts, the exact mean, and the exact variance of a path's sum
   (errors of 1.09, -0.92 and -0.12 standard errors for mean blocks 1, 5 and 40).
 - **History study** (`scripts/bootstrap_study.py`, step 6; FINDINGS F15) on the S&P 500 since 1950 and the US
@@ -78,8 +78,8 @@
   66 C peak, 0 mismatches).
 - **XX along every path** (`definedtarget/xxpaths.py`, the XX layer on top of the engine): the fund repriced each
   session with the simulator's model (Black-76, fee, cash, the slide rule), with NAV drawdowns, time underwater,
-  first touches of 2x / 5x / 10x and XX against SPY. Judged against sim.share_value, the payoff, a plain-Python
-  recomputation of whole paths, and the martingale identity. `scripts/xx_paths_study.py` and FINDINGS F17: at the
+  first touches of 2x / 5x / 10x and XX against SPY. Tests judge it against sim.share_value, the payoff, a
+  plain-Python recomputation of whole paths, and the martingale identity. `scripts/xx_paths_study.py` and FINDINGS F17: at the
   risk-neutral drift XX touches 2x in 49% of futures but ends above its start in 23%; the slide rule pulls the
   expected mid-life mark about 5% below today's price, an open question for the vol model.
 - **Slide-rule test on real history** (`scripts/slide_rule_test.py`, FINDINGS F18): 198 synthetic XXs on real S&P
