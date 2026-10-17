@@ -76,4 +76,4 @@ prices every strike: listed options price the chance of finishing above the stri
 
 This page provides general information only. It gives no investment advice.
 
-Back to [1. What a call option is](01-what-is-a-call.md).
+Next: [6. The Monte Carlo engine](06-the-monte-carlo-engine.md).
