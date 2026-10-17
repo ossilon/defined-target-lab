@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.2.2 (2026-10-17)
+
+### Added
+- **The verdict script** (`definedtarget/verdicts.py`, `scripts/verdicts.py`), promised by protocol P2 before the
+  first review date (2026-12-21). It turns every frozen test and pass band into code: H1-H19 and H7a's checkpoints,
+  P1's clean days, windows, minimum-sample extension (up to three months) and void events, P2's price, file-version
+  and listed-quote rules. Before a review date it shows provisional numbers; on and after it, the verdict word. It
+  appends a verdict to the ledger only when asked (`--record`), and refuses anything not final.
+- **Data captured by the review date** (P2): `parse.captured_by()` makes every loader see only the files downloaded
+  by a cutoff, so each review reads exactly what existed on its date.
+- Tests on synthetic data with known answers: pass and fail for every band, pending, extension, inconclusive, void,
+  the 15-event tests (H1, H9), H5's ex-date ratio, H7a's checkpoints, and which listed readings count under P2 and
+  under a future P3.
+
+### Changed
+- VIX1Y (used by H4, H11, H18) is downloaded on every run instead of weekly.
+
 ## v0.2.1 (2026-10-17)
 
 ### Added

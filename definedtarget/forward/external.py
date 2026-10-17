@@ -22,7 +22,10 @@ CBOE_REFRESH_DAYS = 7
 
 def series(now):
     """(source, short name, url, expected header start, refresh rule) for every public file we keep."""
-    out = [("cboe", f"{s}_History.csv", CBOE.format(s), b"DATE,", "weekly") for s in CBOE_SERIES]
+    # VIX1Y feeds the verdicts of H4, H11 and H18, which read only files captured by their review dates (P2): a weekly
+    # copy could miss the window's last closes, so VIX1Y is fetched on every run; the other indices stay weekly.
+    out = [("cboe", f"{s}_History.csv", CBOE.format(s), b"DATE,", "every_run" if s == "VIX1Y" else "weekly")
+           for s in CBOE_SERIES]
     for y in range(TREASURY_FIRST_YEAR, now.year + 1):
         rule = "every_run" if y == now.year else "once"
         out.append(("treasury", f"par_yield_curve_{y}.csv", TREASURY.format(y=y), b'Date,"1 Mo"', rule))

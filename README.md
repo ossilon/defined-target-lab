@@ -102,6 +102,7 @@ The code here computes each fact from the issuer's public daily files and public
 | **Daily tracker / forward test**: downloads the issuer's public files, checks the accounting, prices the option and writes a one-page report. A new copy prices each close from the first day it runs; to price earlier closes, add SPY's past closes ([data/README.md](data/README.md)) | `py -m definedtarget daily` then `py -m definedtarget report` |
 | **Prospectus illustration**: recomputes the prospectus table | `py -m definedtarget prospectus` |
 | **Pre-registered predictions**: a hash-chained ledger of testable claims about XX's behavior | [forward/HYPOTHESES.md](forward/HYPOTHESES.md) |
+| **Verdicts**: computes each prediction's verdict from its frozen rule (provisional numbers before its review date); records a verdict only when asked | `py -I scripts/verdicts.py` |
 | **Plain-English explainers** | [docs/learn/](docs/learn/01-what-is-a-call.md) |
 
 

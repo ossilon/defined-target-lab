@@ -70,7 +70,9 @@ from definedtarget.forward import external  # noqa: E402
 names = {name: rule for _, name, _, _, rule in external.series(T0)}
 check("current-year Treasury curve is fetched every run", names["par_yield_curve_2026.csv"] == "every_run")
 check("past Treasury years are fetched once", names["par_yield_curve_2024.csv"] == "once")
-check("Cboe volatility histories refresh weekly", names["VIX1Y_History.csv"] == "weekly")
+check("Cboe volatility histories refresh weekly", names["VIX_History.csv"] == "weekly")
+check("VIX1Y is fetched every run (verdicts read only files captured by the review date)",
+      names["VIX1Y_History.csv"] == "every_run")
 seen = [{"url": "u", "result": "saved", "fetched_utc": "2026-10-10T03:00:00Z"}]
 check("weekly file fetched 4 days ago is not due", not external.due(seen, "u", T0, "weekly"))
 check("weekly file fetched 8 days ago is due",

@@ -7,6 +7,7 @@ evidence: a 2-decimal mark looks like a traded price, a 4-decimal mark like a pr
 import csv
 import io
 import re
+from contextlib import contextmanager
 from datetime import datetime
 
 import pandas as pd
@@ -50,13 +51,34 @@ def _num(text):
     return float(text) if text else float("nan")
 
 
+_CAPTURED_BY = [None]          # a cutoff set by captured_by(); None = every saved version
+
+
+@contextmanager
+def captured_by(cutoff_utc):
+    """Inside this block, every loader sees only files downloaded at or before `cutoff_utc` ('YYYY-MM-DDTHH:MM:SSZ').
+
+    Protocol P2: "each review uses the data captured by its review date". Every issuer file, Treasury curve and Cboe
+    history reaches the code through saved_versions(), so one cutoff here applies to all of them.
+    """
+    old = _CAPTURED_BY[0]
+    _CAPTURED_BY[0] = cutoff_utc
+    try:
+        yield
+    finally:
+        _CAPTURED_BY[0] = old
+
+
 def saved_versions(root, prefix):
     """Manifest records of saved (valid) files whose short name starts with prefix, oldest first.
 
     Sorted by download time, not by position in the manifest: captures imported from the cloud can be appended
-    after newer local ones, and "latest" must still mean the most recent download.
+    after newer local ones, and "latest" must still mean the most recent download. Inside captured_by(), files
+    downloaded after the cutoff are left out.
     """
-    recs = [r for r in fetch.read_manifest(root) if r["name"].startswith(prefix) and r["result"] == "saved"]
+    cutoff = _CAPTURED_BY[0]
+    recs = [r for r in fetch.read_manifest(root) if r["name"].startswith(prefix) and r["result"] == "saved"
+            and (cutoff is None or r["fetched_utc"] <= cutoff)]
     return sorted(recs, key=lambda r: r["fetched_utc"])
 
 

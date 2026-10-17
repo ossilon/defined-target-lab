@@ -63,6 +63,11 @@ with tempfile.TemporaryDirectory() as tmp:
     latest = parse.saved_versions(local, "xx_daily")[-1]
     check("'latest' is the most recent download, even though the cloud record was appended later",
           latest["fetched_utc"] == "2026-10-17T05:00:00Z", latest)
+    with parse.captured_by("2026-10-17T04:30:00Z"):
+        cut = parse.saved_versions(local, "xx_daily")
+    check("captured_by() hides files downloaded after the cutoff (P2: data captured by the review date)",
+          [r["fetched_utc"] for r in cut] == ["2026-10-17T03:00:00Z"], cut)
+    check("outside captured_by() every saved version is visible again", len(parse.saved_versions(local, "xx_daily")) == 2)
     again = cloud_import.import_files(clone, root=local)
     check("a second import copies nothing", again == {"imported": 0, "already": 2, "refused": 1}, again)
 
