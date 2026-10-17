@@ -11,6 +11,11 @@
 - Tests against Random123's published known answers (7 and 10 rounds), scipy's `ndtri` (to 1e-14 relative from
   p = 1e-300), thread and chunk invariance, and loose statistical checks.
 - `scripts/b17a_gpu_first_test.py` and FINDINGS F14: a first GPU speed test.
+- **Honest error bars** (`montecarlo.stats`, step 2): mergeable moments (chunks, threads and devices combine
+  exactly), Wilson intervals for probabilities, distribution-free percentile intervals. A coverage test runs 1,000
+  independent runs against exact lognormal answers: the 95% intervals contained the truth 94.0% (price), 94.2%
+  (P(S_T > K)) and 95.4-95.8% (percentiles) of the time, inside the 93.2-96.8% band fixed in advance. For a rare
+  event with about 2 hits per run, the textbook (Wald) interval covered only 87.7%; Wilson's covered 94.8%.
 
 ## v0.2.3 (2026-10-17)
 
