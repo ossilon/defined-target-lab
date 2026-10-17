@@ -102,12 +102,9 @@ def indices(seed, npaths, nsteps, nrows, mean_block, path0=0, stream=0):
     return out
 
 
-def paths(seed, npaths, nsteps, history, mean_block, barrier=None, checkpoints=(), path0=0, stream=0):
-    """Bootstrap npaths paths of nsteps steps from `history` (rows = days; column 0 = the log price step).
-
-    Returns the measures of montecarlo.paths.lognormal for column 0 (log_end, log_max, log_drawdown_end,
-    log_max_drawdown, hit_step, at_checkpoint; no p_no_touch: between closes there is no model) and 'column_end',
-    each column's total over the path (npaths x columns)."""
+def prepare(seed, npaths, nsteps, history, mean_block, barrier=None, checkpoints=(), path0=0, stream=0):
+    """Checked kernel inputs (history array, jump probability, checkpoint steps, log barrier); shared with
+    montecarlo.gpu so both kernels receive identical numbers."""
     d, p = _prep(history, mean_block)
     _check(seed, path0, npaths, nsteps, stream)
     if nsteps < 1:
@@ -116,6 +113,16 @@ def paths(seed, npaths, nsteps, history, mean_block, barrier=None, checkpoints=(
     if check.size and (check[0] < 1 or check[-1] > nsteps):
         raise ValueError("checkpoints are step numbers from 1 to nsteps")
     b = NO_BARRIER if barrier is None else float(np.log(barrier))
+    return d, p, check, b
+
+
+def paths(seed, npaths, nsteps, history, mean_block, barrier=None, checkpoints=(), path0=0, stream=0):
+    """Bootstrap npaths paths of nsteps steps from `history` (rows = days; column 0 = the log price step).
+
+    Returns the measures of montecarlo.paths.lognormal for column 0 (log_end, log_max, log_drawdown_end,
+    log_max_drawdown, hit_step, at_checkpoint; no p_no_touch: between closes there is no model) and 'column_end',
+    each column's total over the path (npaths x columns)."""
+    d, p, check, b = prepare(seed, npaths, nsteps, history, mean_block, barrier, checkpoints, path0, stream)
     out = {k: np.empty(npaths) for k in ("log_end", "log_max", "log_drawdown_end", "log_max_drawdown")}
     out["hit_step"] = np.empty(npaths, dtype=np.int64)
     out["at_checkpoint"] = np.full((npaths, check.size), np.nan)

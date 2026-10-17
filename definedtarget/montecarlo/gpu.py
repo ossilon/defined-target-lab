@@ -3,8 +3,9 @@
 Same Philox4x32-10, same addresses (seed, path, draw, stream), same 52-bit uniforms and the same AS241 inverse
 normal, written in CUDA C and compiled on first use by NVRTC (through CuPy). The 32-bit words and the uniforms are
 bit-identical to the CPU's. Normals are bit-identical where the inverse normal is pure arithmetic (the central 85%);
-in the tails it calls log, and a platform's log may round the last digit differently (identical on the RTX 3080 and
-Windows numba, 2026-10-17). tests/test_mc_rng.py checks both.
+in the tails it calls log, and NVIDIA's log can round the last digit differently from the CPU's (measured on the
+RTX 3080, 2026-10-17: 405 of 16.28 million normals, all in the tails; identical in a first sample of 27,009).
+tests/test_mc_rng.py and tests/test_mc_gpu.py check both.
 
 GPU words for a beginner: a *kernel* is a function that thousands of GPU threads run at once, each on its own index;
 here one thread makes one draw pair of one path. `__umulhi` gives the high 32 bits of a 32 x 32-bit product in one
@@ -90,6 +91,72 @@ __global__ void philox_fill(unsigned long long seed, unsigned long long path0, l
     }
 }
 
+/* One thread = one lognormal path; the same operations, in the same order, as paths._lognormal. */
+__global__ void lognormal_paths(unsigned long long seed, unsigned long long path0, long long npaths, int nsteps,
+                                const double* drift, const double* vsd, double barrier, int has_barrier,
+                                const long long* check, int ncheck, unsigned int stream,
+                                double* log_end, double* log_max, double* dd_end, double* mdd, long long* hit,
+                                double* p_no, double* at_check) {
+    long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= npaths) return;
+    unsigned long long path = path0 + (unsigned long long)i;
+    unsigned int k0 = (unsigned int)(seed & 0xFFFFFFFFull), k1 = (unsigned int)(seed >> 32);
+    double x = 0.0, top = 0.0, worst = 0.0, alive = barrier > 0.0 ? 1.0 : 0.0;
+    long long first = -1;
+    int j = 0;
+    for (int b = 0; b < (nsteps + 1) / 2; b++) {
+        unsigned int c[4] = {(unsigned int)b, (unsigned int)(path & 0xFFFFFFFFull), (unsigned int)(path >> 32), stream};
+        philox4x32(c, k0, k1, 10);
+        for (int half = 0; half < 2; half++) {
+            int k = 2 * b + half;
+            if (k >= nsteps) break;
+            double z = inv_norm(half == 0 ? u52(c[0], c[1]) : u52(c[2], c[3]));
+            double x_new = x + drift[k] + vsd[k] * z;
+            if (has_barrier) {
+                if (first < 0 && x_new >= barrier) first = k;
+                if (alive > 0.0) {
+                    if (x_new >= barrier) alive = 0.0;
+                    else alive *= 1.0 - exp(-2.0 * (barrier - x) * (barrier - x_new) / (vsd[k] * vsd[k]));
+                }
+            }
+            x = x_new;
+            if (x > top) top = x;
+            if (top - x > worst) worst = top - x;
+            while (j < ncheck && check[j] == k + 1) { at_check[i * ncheck + j] = x; j++; }
+        }
+    }
+    log_end[i] = x; log_max[i] = top; dd_end[i] = top - x; mdd[i] = worst; hit[i] = first; p_no[i] = alive;
+}
+
+/* One thread = one bootstrap path; the same operations, in the same order, as bootstrap._paths. */
+__global__ void bootstrap_paths(unsigned long long seed, unsigned long long path0, long long npaths, int nsteps,
+                                const double* data, long long n, int ncols, double p, double barrier,
+                                const long long* check, int ncheck, unsigned int stream,
+                                double* log_end, double* log_max, double* dd_end, double* mdd, long long* hit,
+                                double* at_check, double* col_end) {
+    long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= npaths) return;
+    unsigned long long path = path0 + (unsigned long long)i;
+    unsigned int k0 = (unsigned int)(seed & 0xFFFFFFFFull), k1 = (unsigned int)(seed >> 32);
+    long long idx = 0, first = -1;
+    double x = 0.0, top = 0.0, worst = 0.0;
+    int j = 0;
+    for (int c = 0; c < ncols; c++) col_end[i * ncols + c] = 0.0;
+    for (int k = 0; k < nsteps; k++) {
+        unsigned int w[4] = {(unsigned int)k, (unsigned int)(path & 0xFFFFFFFFull), (unsigned int)(path >> 32), stream};
+        philox4x32(w, k0, k1, 10);
+        if (k == 0 || u52(w[0], w[1]) < p) idx = (long long)(u52(w[2], w[3]) * (double)n);
+        else { idx += 1; if (idx == n) idx = 0; }
+        x += data[idx * ncols];
+        for (int c = 0; c < ncols; c++) col_end[i * ncols + c] += data[idx * ncols + c];
+        if (first < 0 && x >= barrier) first = k;
+        if (x > top) top = x;
+        if (top - x > worst) worst = top - x;
+        while (j < ncheck && check[j] == k + 1) { at_check[i * ncheck + j] = x; j++; }
+    }
+    log_end[i] = x; log_max[i] = top; dd_end[i] = top - x; mdd[i] = worst; hit[i] = first;
+}
+
 }
 """
 
@@ -137,6 +204,52 @@ def _fill(seed, npaths, ndraws, path0, stream, as_normal):
                                               (np.uint64(seed), np.uint64(path0), np.int64(npaths), np.int64(ndraws),
                                                np.uint32(stream), np.int32(as_normal), out))
     return out
+
+
+def _grid_launch(npaths, threads=128):
+    return ((npaths + threads - 1) // threads,), (threads,)
+
+
+def lognormal(seed, npaths, times, mu, vol, barrier=None, checkpoints=(), path0=0, stream=0, as_cupy=False):
+    """paths.lognormal on the GPU: the same arguments, measures and operations as the CPU kernel. Values match the
+    CPU's to about 1e-16: a rare tail normal (about 1 in 40,000 draws, where the inverse normal calls log) and the
+    bridge's exp() can round their last digit differently on the GPU. Arrays come back as numpy (or CuPy)."""
+    import cupy as cp
+    from .paths import prepare
+    drift, vsd, check, b = prepare(seed, npaths, times, mu, vol, barrier, checkpoints, path0, stream)
+    names = ("log_end", "log_max", "log_drawdown_end", "log_max_drawdown", "p_no_touch")
+    out = {k: cp.empty(npaths) for k in names}
+    out["hit_step"] = cp.empty(npaths, dtype=cp.int64)
+    out["at_checkpoint"] = cp.full((npaths, check.size), cp.nan)
+    if npaths:
+        _module().get_function("lognormal_paths")(
+            *_grid_launch(npaths),
+            (np.uint64(seed), np.uint64(path0), np.int64(npaths), np.int32(drift.size), cp.asarray(drift), cp.asarray(vsd),
+             np.float64(b), np.int32(np.isfinite(b)), cp.asarray(check), np.int32(check.size), np.uint32(stream),
+             out["log_end"], out["log_max"], out["log_drawdown_end"], out["log_max_drawdown"], out["hit_step"],
+             out["p_no_touch"], out["at_checkpoint"]))
+    return out if as_cupy else {k: cp.asnumpy(v) for k, v in out.items()}
+
+
+def bootstrap(seed, npaths, nsteps, history, mean_block, barrier=None, checkpoints=(), path0=0, stream=0,
+              as_cupy=False):
+    """bootstrap.paths on the GPU: the same arguments and measures, bit-identical to the CPU."""
+    import cupy as cp
+    from .bootstrap import prepare
+    d, p, check, b = prepare(seed, npaths, nsteps, history, mean_block, barrier, checkpoints, path0, stream)
+    names = ("log_end", "log_max", "log_drawdown_end", "log_max_drawdown")
+    out = {k: cp.empty(npaths) for k in names}
+    out["hit_step"] = cp.empty(npaths, dtype=cp.int64)
+    out["at_checkpoint"] = cp.full((npaths, check.size), cp.nan)
+    out["column_end"] = cp.empty((npaths, d.shape[1]))
+    if npaths:
+        _module().get_function("bootstrap_paths")(
+            *_grid_launch(npaths),
+            (np.uint64(seed), np.uint64(path0), np.int64(npaths), np.int32(nsteps), cp.asarray(d), np.int64(d.shape[0]),
+             np.int32(d.shape[1]), np.float64(p), np.float64(b), cp.asarray(check), np.int32(check.size),
+             np.uint32(stream), out["log_end"], out["log_max"], out["log_drawdown_end"], out["log_max_drawdown"],
+             out["hit_step"], out["at_checkpoint"], out["column_end"]))
+    return out if as_cupy else {k: cp.asnumpy(v) for k, v in out.items()}
 
 
 def normals(seed, npaths, ndraws, path0=0, stream=0):

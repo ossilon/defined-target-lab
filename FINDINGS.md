@@ -329,3 +329,25 @@ so this is not a mispricing claim, it is a statement about how daily risk adds u
 Few separate 3-year spans exist in any history (about 23 since 1950, 31 since 1926), so the block length (a choice,
 reported at three values) moves the answer as much as the history does. Price returns, demeaned: dividends do not
 change the shape. A regime model and a joint volatility path are later work (v0.3.x).
+
+**F16. The engine's GPU path kernels run XX's 814-session paths 2.4x (lognormal) to 16x (bootstrap) faster than 24
+CPU threads, and held up through a 5-minute full-load stress test with no errors.** Measured 2026-10-17
+(`scripts/gpu_stress_test.py`, `tests/test_mc_gpu.py`; RTX 3080 10 GB, CuPy 14.2 with CUDA 13.2; i7-13700K):
+
+| Kernel (1 million paths x 814 real sessions, 64-bit) | 24 CPU threads | RTX 3080 | GPU / CPU |
+|---|---|---|---|
+| lognormal (with barrier and Brownian-bridge touch) | 0.57 billion path-steps/s | 1.36 billion | 2.4x |
+| bootstrap (S&P-shaped history, mean block 126) | 1.26 billion | 19.7 billion | 16x |
+
+Stress test: 301 s at 100% load, alternating the two kernels on new paths: 229 batches, 916 million paths, 0.75
+trillion path-steps. Temperature 45-66 C (stop set at 83 C), core clock 1,935-1,965 MHz, power up to 190 W, fan up to
+72%. Speed in the last minute was 2-4% below the first (lognormal 1.36 to 1.33, bootstrap 19.65 to 18.91), with the
+core clock 15-30 MHz lower: a small warm-up effect, no throttling. A CPU recomputation of 2,000 paths from every batch
+found 0 mismatches (bootstrap bit for bit; lognormal within 2.2e-16). Over 460 million lognormal paths, P(touch +28%
+before expiry) = 0.502710 +/- 0.000023 against the exact 0.502716.
+
+What it teaches: the bootstrap is mostly integer work (Philox) and table lookups, where a gaming GPU is very fast;
+the lognormal turns every random number into a normal with about 30 64-bit operations, and this card does 64-bit
+arithmetic at 1/64 of its 32-bit rate, so that kernel is limited by arithmetic and draws only about half the card's
+power. A 32-bit lognormal kernel is the next speed step, with its accuracy measured against the 64-bit one. GPU and
+CPU values agree to the last digit except about 1 in 40,000 tail normals, where NVIDIA's log rounds differently.

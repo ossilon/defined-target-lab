@@ -7,7 +7,8 @@
   other projects can use it unchanged. Step 1: counter-based random numbers (Philox4x32-10) addressed by (seed, path,
   draw, stream), 52-bit uniforms that are never 0 or 1, and Wichura's AS241 inverse normal. Results do not depend on
   the number of threads, the chunk size or the device: the optional GPU twin (`montecarlo.gpu`, needs CuPy) returns
-  the same 32-bit words and uniforms bit for bit, and on the test machine the same normals too.
+  the same 32-bit words and uniforms bit for bit, and the same normals except about 1 in 40,000 tail draws, whose
+  last digit can differ because NVIDIA's log rounds differently (405 of 16.28 million on the test machine).
 - Tests against Random123's published known answers (7 and 10 rounds), scipy's `ndtri` (to 1e-14 relative from
   p = 1e-300), thread and chunk invariance, and loose statistical checks.
 - `scripts/b17a_gpu_first_test.py` and FINDINGS F14: a first GPU speed test.
@@ -42,6 +43,11 @@
   market since 1926: generators built from 1950-1999 understated 2000-2026's drawdowns (37-39% of windows above their
   90th percentile; that era ran at 19.2% volatility against 13.6%), and at the same daily volatility, post-1950 S&P
   history makes XX's option worth 13-24% less than the lognormal model, mostly through a thinner 3-year upper tail.
+- **GPU path kernels** (`montecarlo.gpu.lognormal`, `.bootstrap`): the same inputs, measures and operations as the CPU
+  kernels; the bootstrap matches the CPU bit for bit, the lognormal to about 1e-16. On the test machine they run
+  2.4x and 16x faster than 24 CPU threads. `scripts/gpu_stress_test.py` runs them at full load for a set time with
+  temperature logging, a temperature stop and CPU spot checks (FINDINGS F16: 5 minutes, 0.75 trillion path-steps,
+  66 C peak, 0 mismatches).
 
 ## v0.2.3 (2026-10-17)
 

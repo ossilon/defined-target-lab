@@ -79,12 +79,9 @@ def times_from_dates(dates, basis=365.0):
     return t
 
 
-def lognormal(seed, npaths, times, mu, vol, barrier=None, checkpoints=(), path0=0, stream=0):
-    """Simulate npaths lognormal paths on `times` (year fractions, starting at 0) and return their measures.
-
-    mu: the log-price drift is mu - vol^2 / 2 (so E[S_t] = S_0 exp(mu t)); vol: annual volatility.
-    barrier: a level as a multiple of S_0 (e.g. 1.28) for hit_step and p_no_touch; None for no barrier.
-    checkpoints: step numbers k (1 .. nsteps) whose log level is returned in 'at_checkpoint' (npaths x len)."""
+def prepare(seed, npaths, times, mu, vol, barrier=None, checkpoints=(), path0=0, stream=0):
+    """Checked kernel inputs (step drifts, step spreads, checkpoint steps, log barrier); shared with montecarlo.gpu so
+    the CPU and GPU kernels receive identical numbers."""
     t = np.asarray(times, dtype=np.float64)
     if t.ndim != 1 or t.size < 2 or t[0] != 0.0 or np.any(np.diff(t) <= 0):
         raise ValueError("times must start at 0 and increase strictly")
@@ -93,12 +90,20 @@ def lognormal(seed, npaths, times, mu, vol, barrier=None, checkpoints=(), path0=
     nsteps = t.size - 1
     _check(seed, path0, npaths, nsteps, stream)
     dt = np.diff(t)
-    drift = (mu - 0.5 * vol * vol) * dt
-    vsd = vol * np.sqrt(dt)
     check = np.asarray(sorted(checkpoints), dtype=np.int64)
     if check.size and (check[0] < 1 or check[-1] > nsteps):
         raise ValueError("checkpoints are step numbers from 1 to nsteps")
     b = NO_BARRIER if barrier is None else math.log(barrier)
+    return (mu - 0.5 * vol * vol) * dt, vol * np.sqrt(dt), check, b
+
+
+def lognormal(seed, npaths, times, mu, vol, barrier=None, checkpoints=(), path0=0, stream=0):
+    """Simulate npaths lognormal paths on `times` (year fractions, starting at 0) and return their measures.
+
+    mu: the log-price drift is mu - vol^2 / 2 (so E[S_t] = S_0 exp(mu t)); vol: annual volatility.
+    barrier: a level as a multiple of S_0 (e.g. 1.28) for hit_step and p_no_touch; None for no barrier.
+    checkpoints: step numbers k (1 .. nsteps) whose log level is returned in 'at_checkpoint' (npaths x len)."""
+    drift, vsd, check, b = prepare(seed, npaths, times, mu, vol, barrier, checkpoints, path0, stream)
     out = {k: np.empty(npaths) for k in ("log_end", "log_max", "log_drawdown_end", "log_max_drawdown", "p_no_touch")}
     out["hit_step"] = np.empty(npaths, dtype=np.int64)
     out["at_checkpoint"] = np.full((npaths, check.size), np.nan)
