@@ -11,6 +11,13 @@
   `scripts/forecast_check.py`; the daily routine notes a due entry and stops on a late one. Tests judge every model
   against an exact answer (XX's NAV at the target depends only on SPY's level there): worst gap 0.0019 at 200,000
   paths.
+- **No look-ahead** (`montecarlo.causal`, tests/test_lookahead.py): `causal.check(rule, series)` replaces the
+  future after many cut points with different data and requires every earlier output to stay identical; it passes
+  causal rules and catches a centered average, tomorrow's value, a full-sample z-score and a one-row peek at the
+  end. Every path engine (lognormal and bootstrap, CPU and GPU, and the XX layer) reports at session k exactly what
+  a run stopped at k reports, bit for bit; the bootstrap's row choices up to step k do not depend on the path's
+  length; and FC1's inputs for an origin ignore every later row. Later strategy rules (v0.3.2) must pass the same
+  checker.
 - **Run manifests** (`montecarlo.manifest`, standard library only): every study script (bootstrap, XX paths, slide
   rule, effective leverage, and the two GPU speed tests) writes `results/manifests/<study>_<date>_<output>.json`
   with its arguments, seeds, settings, the SHA-256 and size of each input file, the SHA-256 of every code file, the
