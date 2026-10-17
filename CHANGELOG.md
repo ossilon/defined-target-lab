@@ -25,6 +25,13 @@
   continuous touch (+28% before expiry: exact 0.54079). Two approximations sit within allowances fixed in advance:
   Broadie-Glasserman-Kou for touches checked at closes, and Magdon-Ismail's zero-drift expected maximum drawdown
   (extrapolated 0.25090 against 0.25066).
+- **Fixed-memory results** (`montecarlo.stream`, step 4): results from any number of paths, chunk by chunk.
+  Percentiles come from a 65,536-bin histogram plus one replay of the same paths (the random numbers are addressed,
+  so a replay repeats them exactly); the replay keeps only the values in the needed bin and returns the same order
+  statistics as a full sort, bit for bit (tested on 3 million values; it kept 7 to 1,248 of them). `run_to_precision`
+  runs until a target standard error is met or a path limit is reached, and reports which. On the test machine's CPU:
+  the option value to SE 0.004 took 1.03 billion paths in 30 s (54.67715 against Black-76 54.67744), and the exact
+  median of 1 billion end prices took 51 s while keeping 235,112 values (843.66519 against the exact 843.66528).
 
 ## v0.2.3 (2026-10-17)
 
