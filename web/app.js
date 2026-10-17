@@ -22,12 +22,21 @@
     SPEC: {button: "+ SPEC", per: "share", underlying: "etf", q: 0.99, modelVol: 0.166,
            note: "Price paid is a model value at 16.6% vol: type the fund's real price."}
   };
-  var SPEC_EXAMPLE = {
-    name: "Hypothetical call-spread target fund", index: "S&P 500", etf: "SPY", target: "2030-01-10",
-    index_per_etf_target: 10.045,
-    cash: 0.3, fee: 0.95,
-    legs: [{kind: "call", sign: 1, strike: 900, units: 0.5}, {kind: "call", sign: -1, strike: 1100, units: 0.5}]
+  var SPEC_EXAMPLES = {
+    "SPY CALL SPREAD": {
+      name: "Hypothetical call-spread target fund", index: "S&P 500", etf: "SPY", target: "2030-01-10",
+      index_per_etf_target: 10.045, cash: 0.3, fee: 0.95,
+      legs: [{kind: "call", sign: 1, strike: 900, units: 0.5}, {kind: "call", sign: -1, strike: 1100, units: 0.5}]},
+    "QQQ NDX 50,000": {
+      name: "Hypothetical NDX 50,000 target fund", index: "Nasdaq-100", etf: "QQQ", target: "2030-01-10",
+      index_per_etf_target: 41.167, cash: 0.25, fee: 0.99,
+      legs: [{kind: "call", sign: 1, strike: 1214.57, units: 0.76}],
+      example_market: {etf: 750, index: 30825, div_yield: 0.55, vol: 21,
+                       note: "illustrative round numbers near October 2026 levels (NDX is about 41.1 x QQQ), not quotes"}}
   };
+  // ETFs whose index we know: a spec may leave "index" out, and may not contradict these
+  var ETF_INDEX = {SPY: "S&P 500", VOO: "S&P 500", IVV: "S&P 500", SPLG: "S&P 500", SPYM: "S&P 500",
+                   QQQ: "Nasdaq-100", QQQM: "Nasdaq-100", DIA: "Dow Jones Industrial Average", IWM: "Russell 2000"};
   var MUS = [null, 0.04, 0.06, 0.08, 0.10, 0.12, 0.14, 0.16, 0.20, 0.24];
   var VIEWS = [["pl", "P/L $"], ["plp", "P/L %"], ["val", "VALUE"], ["lev", "LEVERAGE"]];
   var PRESETS = [["F1 CRASH +3", 3, "am"], ["F2 CRASH +6", 6, "am"], ["F3 CRASH +10", 10, "am"],
@@ -60,14 +69,15 @@
   function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
   function F() { return FUNDS[S.fund]; }
   // The index the fund tracks. The S&P 500 evidence on the page (F10 skew, F12 slide, F13 history) fits only S&P funds.
-  function isSP() { return S.fund !== "SPEC" || /s\s*&\s*p|500/i.test(S.spec.index || "S&P 500"); }
-  var INDEX_SYMBOLS = [[/nasdaq[\s-]*100|^ndx$/i, "NDX"], [/dow|djia|^dji$/i, "DJIA"], [/russell[\s-]*2000|^rut$/i, "RUT"]];
-  function ixName() {                                  // short labels: the index's usual symbol where we know it
-    if (isSP()) return "S&P";
-    var name = String(S.spec.index).trim();
+  var INDEX_SYMBOLS = [[/s\s*&\s*p\s*500|^s\s*&\s*p$|^spx$/i, "S&P"], [/nasdaq[\s-]*100|^ndx$/i, "NDX"],
+                       [/dow|djia|^dji$/i, "DJIA"], [/russell[\s-]*2000|^rut$/i, "RUT"]];
+  function indexSymbol(name) {                         // short labels: the index's usual symbol where we know it
+    name = String(name || "").trim();
     for (var i = 0; i < INDEX_SYMBOLS.length; i++) if (INDEX_SYMBOLS[i][0].test(name)) return INDEX_SYMBOLS[i][1];
     return name;
   }
+  function isSP() { return S.fund !== "SPEC" || indexSymbol(S.spec.index) === "S&P"; }
+  function ixName() { return isSP() ? "S&P" : indexSymbol(S.spec.index); }
   function replaceText(node, a, b) {                   // swap a word in the text of an already-built element
     if (!node || a === b) return;
     var w = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null, false), n;
@@ -103,12 +113,29 @@
     if (s.index_per_etf_target !== undefined && !(s.index_per_etf_target > 0)) throw new Error("\"index_per_etf_target\" must be > 0");
     if (s.index !== undefined && (typeof s.index !== "string" || !s.index.trim() || s.index.length > 30))
       throw new Error("\"index\" must be a short name such as \"S&P 500\" or \"Nasdaq-100\"");
+    var known = ETF_INDEX[String(s.etf || "").trim().toUpperCase()];
+    if (known && s.index !== undefined && indexSymbol(s.index) !== indexSymbol(known))
+      throw new Error(String(s.etf).toUpperCase() + " tracks the " + known + ", not the " + s.index + ": fix \"index\" or \"etf\"");
+    if (s.index === undefined) s.index = known || "S&P 500";
+    var mk = s.example_market;
+    if (mk !== undefined && !(mk.etf > 0 && mk.index > 0 && mk.div_yield >= 0 && (mk.vol === undefined || mk.vol > 0)))
+      throw new Error("\"example_market\" needs etf > 0, index > 0, div_yield >= 0 (and vol > 0 if given)");
     return s;
   }
+  function specMarket() { return S.fund === "SPEC" && S.spec && S.spec.example_market; }
+  function modelVol(f) { var mk = specMarket(); return mk && mk.vol ? mk.vol / 100 : f.modelVol; }
+  function fundNote() {                                 // what the price paid is, for presets without a real price
+    var f = F(), mk = specMarket();
+    if (S.fund !== "SPEC") return f.note || "";
+    return "Price paid is a model value at " + (modelVol(f) * 100).toFixed(1) + "% vol: type the fund's real price." +
+      (mk && mk.note ? " Example market: " + esc(mk.note) + "." : "");
+  }
   function setMarket(f) {
-    $("date").value = MARKET.date; $("rate").value = MARKET.rate; $("q").value = f.q;
-    $("idx").value = MARKET.idx;
-    $("etf").value = f.underlying === "index" ? MARKET.idx : MARKET.etf;
+    var mk = specMarket();
+    $("date").value = MARKET.date; $("rate").value = MARKET.rate;
+    $("q").value = mk ? mk.div_yield : f.q;
+    $("idx").value = mk ? mk.index : MARKET.idx;
+    $("etf").value = mk ? mk.etf : f.underlying === "index" ? MARKET.idx : MARKET.etf;
   }
   function loadFund(key, keepMarket) {
     var f = FUNDS[key];
@@ -132,8 +159,8 @@
     if (!keepMarket) {
       if (f.paid) $("paid").value = f.paid;
       else {                                            // a model price, labeled as such in the note
-        var v = readInputs(), M = model(v, f.modelVol);
-        $("paid").value = round(E.shareValue(M.fund, v.etf, 0, f.modelVol, M.m), f.per === "contract" ? 0 : 2);
+        var mv = modelVol(f), v = readInputs(), M = model(v, mv);
+        $("paid").value = round(E.shareValue(M.fund, v.etf, 0, mv, M.m), f.per === "contract" ? 0 : 2);
       }
     }
   }
@@ -219,8 +246,8 @@
       return;
     }
     if (!S.volTyped) S.lastVol = M.vol;
-    note.innerHTML = S.fromLink ? "Inputs came from the link (after the #)." : (F().note ? F().note + " " : "") +
-      (isSP() ? "Market inputs: dated example (close of " + MARKET.date + "); type today's numbers to update every figure." :
+    note.innerHTML = S.fromLink ? "Inputs came from the link (after the #)." : (fundNote() ? fundNote() + " " : "") +
+      (specMarket() ? "" : isSP() ? "Market inputs: dated example (close of " + MARKET.date + "); type today's numbers to update every figure." :
        '<span style="color:var(--amb)">The example market inputs are SPY and the S&amp;P 500: type your fund\'s ETF price, its ' +
        "index level, rate and dividend yield.</span>");
     $("rangeOut").textContent = " +" + (1.5 * S.range) + "% / -" + S.range + "%";
@@ -453,11 +480,23 @@
       c.appendChild(b);
     });
   }
+  function useExample(name) {                           // copy, so loading never changes the stored example
+    var text = JSON.stringify(SPEC_EXAMPLES[name], null, 1);
+    $("spec").value = text;
+    S.spec = parseSpec(text);
+    S.specExample = name;
+  }
   function drawControls() {
+    buttons("specExamples", Object.keys(SPEC_EXAMPLES).map(function (k) { return {label: k, key: k}; }),
+            function (it) { return it.key === S.specExample; },
+            function (it) {
+              useExample(it.key); $("specNote").textContent = ""; S.fromLink = false;
+              loadFund("SPEC"); drawControls(); render();
+            });
     buttons("funds", ["XX", "LISTED", "SPEC"].map(function (k) { return {label: FUNDS[k].button, key: k}; }),
             function (it) { return it.key === S.fund; },
             function (it) {
-              if (it.key === "SPEC" && !S.spec) { S.spec = SPEC_EXAMPLE; $("spec").value = JSON.stringify(SPEC_EXAMPLE, null, 1); }
+              if (it.key === "SPEC" && !S.spec) useExample("QQQ NDX 50,000");
               S.fromLink = false; loadFund(it.key); drawControls(); render();
             });
     buttons("views", VIEWS.map(function (x) { return {label: x[1], key: x[0]}; }),
@@ -517,9 +556,10 @@
     $("specApply").addEventListener("click", function () {
       try {
         S.spec = parseSpec($("spec").value);
-        $("specNote").textContent = "loaded: " + S.spec.legs.length + " leg(s)";
+        S.specExample = null;
+        $("specNote").textContent = "loaded: " + S.spec.legs.length + " leg(s), index " + indexSymbol(S.spec.index);
         $("specNote").className = "note";
-        loadFund("SPEC"); render();
+        loadFund("SPEC"); drawControls(); render();
       } catch (e) { $("specNote").textContent = "spec error: " + e.message; $("specNote").className = "note err"; }
     });
     $("shift").addEventListener("input", function () { S.shift = parseFloat($("shift").value); drawControls(); later(); });
