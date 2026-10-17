@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.1 (2026-10-17)
+
+### Added
+- **Link previews**: the simulator page carries preview tags, so a shared link shows a card (title, description
+  and `docs/img/simulator-card.png`, drawn by `scripts/make_card.py` from the engine's own grid for the README example).
+- **README** links to the live simulator. The identifier scan allows the simulator's own GitHub Pages address in the
+  README and the page, and nowhere else (tests in `tests/test_license_guard.py`).
+- Clearer page title for search results and shared links.
+
 ## v0.2.0 (2026-10-17)
 
 The browser simulator: a no-install page that shows what one share of a defined-target call ETF is worth at any

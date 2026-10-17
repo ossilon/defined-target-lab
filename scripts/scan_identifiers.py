@@ -6,8 +6,9 @@
 It checks every file that git would publish (everything .gitignore does not exclude, matched the way git matches):
 1. personal terms from the PRIVATE list identifiers_local.txt (git-ignored, so the list itself is never published),
    in file contents and file names. The author's public handle may appear only where attribution needs it: the
-   LICENSE copyright line, the CITATION.cff author line, the README citation line and the repository URL. The scan
-   reads the handle and the URL from CITATION.cff, so this code never names them;
+   LICENSE copyright line, the CITATION.cff author line, the README citation line, the repository URL, and the
+   simulator's GitHub Pages address in the README and web/index.html. The scan reads the handle and the URL from
+   CITATION.cff, so this code never names them;
 2. generic leaks: Windows/Unix home-directory paths, email addresses, things that look like API keys or tokens,
    plus British spellings (the public style rule is plain American English);
 3. data files that must never be published (CSV/JSON/JSONL/XLS/PDF/Parquet outside the fund specs and docs), image
@@ -46,6 +47,15 @@ ATTRIBUTION_PREFIX = {"LICENSE": r"^Copyright \(c\) \d{4} ",
                       "CITATION.cff": r"^\s*-\s*(?:name|alias):\s*\"?",
                       "README.md": r"^> "}
 URL_FILES = {"CITATION.cff", "README.md"}                 # files that may carry the repository URL
+# Files that may carry the simulator's public address (GitHub Pages: https://<owner>.github.io/<repo>/...), which the
+# scan works out from the repository URL: the README links to it, and the page's preview tags need absolute links.
+PAGES_FILES = {"README.md", "web/index.html"}
+
+
+def pages_prefix(url):
+    """https://github.com/<owner>/<repo> -> https://<owner>.github.io/<repo>/ (GitHub Pages lower-cases the owner)."""
+    m = re.match(r"https://github\.com/([^/\s]+)/([^/\s]+?)/?$", url or "")
+    return f"https://{m[1].lower()}.github.io/{m[2]}/" if m else None
 
 
 def attribution(repo=REPO):
@@ -63,6 +73,9 @@ def without_attribution(rel, line, handle, url):
     """The line with only the permitted attribution removed, so a personal term anywhere else still counts."""
     if url and rel in URL_FILES:
         line = line.replace(url, "")
+    pages = pages_prefix(url)
+    if pages and rel in PAGES_FILES:
+        line = re.sub(re.escape(pages) + r"[^\s\"'<>)\]]*", "", line)
     if handle and rel in ATTRIBUTION_PREFIX:
         line = re.sub(f"({ATTRIBUTION_PREFIX[rel]}){re.escape(handle)}", r"\1", line)
     return line

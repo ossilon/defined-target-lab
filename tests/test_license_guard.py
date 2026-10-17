@@ -85,6 +85,26 @@ with tempfile.TemporaryDirectory() as tmp:
     for line, why in ((2, "another private term on a URL line"), (3, "the handle anywhere else"),
                       (4, "another private term after '> '"), (5, "another private term in a different URL")):
         check(f"{why} still fails", any(p.startswith(f"README.md:{line}:") for p in probs), probs)
+# 3c. The simulator's GitHub Pages address (https://<owner>.github.io/<repo>/...) may appear in README.md and
+#     web/index.html only; anywhere else, or another owner's Pages address, still fails.
+check("the Pages address is worked out from the repository URL (owner lower-cased)",
+      scan_ids.pages_prefix("https://github.com/ZZhandle/tool") == "https://zzhandle.github.io/tool/")
+with tempfile.TemporaryDirectory() as tmp:
+    readme, page, other = Path(tmp) / "README.md", Path(tmp) / "index.html", Path(tmp) / "notes.md"
+    readme.write_text("Try it: https://zzhandle.github.io/tool/web/\n"
+                      "Fork: https://zzhandle.github.io/othertool/web/\n", encoding="utf-8")
+    page.write_text('<meta property="og:image" content="https://zzhandle.github.io/tool/docs/img/card.png">\n'
+                    '<meta name="author" content="zzhandle">\n', encoding="utf-8")
+    other.write_text("see https://zzhandle.github.io/tool/web/\n", encoding="utf-8")
+    probs = scan_ids.scan([("README.md", readme), ("web/index.html", page), ("notes/notes.md", other)],
+                          personal=fake, handle="zzhandle", url=URL)
+    check("the simulator's own Pages address passes in README.md and web/index.html",
+          not any(p.startswith(("README.md:1:", "web/index.html:1:")) for p in probs), probs)
+    check("a Pages address for a different repository still fails", any(p.startswith("README.md:2:") for p in probs),
+          probs)
+    check("the handle elsewhere in web/index.html still fails", any(p.startswith("web/index.html:2:") for p in probs),
+          probs)
+    check("the Pages address in any other file still fails", any(p.startswith("notes/notes.md") for p in probs), probs)
 check("the scan reads the handle and the URL from the repository's CITATION.cff",
       all(scan_ids.attribution()), scan_ids.attribution())
 

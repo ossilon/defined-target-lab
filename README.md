@@ -3,6 +3,11 @@
 **Simulate, calculate and forward-test the Roundhill XX ETF (S&P 500® Target 10,000 2030) and other
 defined-target call ETFs.**
 
+**[Open the browser simulator](https://ossilon.github.io/defined-target-lab/web/)**: no install, and nothing you
+type leaves your browser.
+
+[![The simulator: one share's P/L on a date x S&P grid](docs/img/simulator-card.png)](https://ossilon.github.io/defined-target-lab/web/)
+
 These tools price, forward-test and simulate defined-target call ETFs. The first fund is XX, which targets the
 S&P 500 at 10,000 by 2030. No issuer sponsors this project. It gives no investment advice.
 
@@ -92,7 +97,7 @@ The code here computes each fact from the issuer's public daily files and public
 
 | Tool | Command (from the repository folder) |
 |---|---|
-| **Browser simulator** (v0.2): a date × S&P grid of one share's P/L, value or leverage, with the odds of finishing above each level, volatility scenarios, and presets for XX, a listed S&P 500 call or any fund you describe. No install; nothing you type leaves your browser. | open [web/index.html](web/index.html) in a browser ([how to read it](docs/learn/05-the-simulator.md)); [web/selftest.html](web/selftest.html) checks its maths against the Python engine |
+| **Browser simulator** (v0.2): a date × S&P grid of one share's P/L, value or leverage, with the odds of finishing above each level, volatility scenarios, and presets for XX, a listed S&P 500 call or any fund you describe. No install; nothing you type leaves your browser. | [open it online](https://ossilon.github.io/defined-target-lab/web/), or open [web/index.html](web/index.html) from a copy ([how to read it](docs/learn/05-the-simulator.md)); [the self-test](https://ossilon.github.io/defined-target-lab/web/selftest.html) checks its maths against the Python engine |
 | **"What must the S&P do?" calculator**: computes break-evens, a payoff table and odds across growth assumptions. Runs without downloaded data. | `py -m definedtarget calc --price 25 --spot 760 --iv 0.17 --rate 0.048 --as-of 2026-10-01` |
 | **Daily tracker / forward test**: downloads the issuer's public files, checks the accounting, prices the option and writes a one-page report. A new copy prices each close from the first day it runs; to price earlier closes, add SPY's past closes ([data/README.md](data/README.md)) | `py -m definedtarget daily` then `py -m definedtarget report` |
 | **Prospectus illustration**: recomputes the prospectus table | `py -m definedtarget prospectus` |

@@ -101,7 +101,8 @@
     var name = ixName(), sp = isSP();
     var word = S.fund === "LISTED" ? "SPX" : S.fund === "SPEC" ? "SPEC" : "XX";
     $("logo").textContent = logo(word);
-    document.title = word + " // TARGET SIM";
+    document.title = word + " // TARGET SIM: " + (S.fund === "LISTED" ? "listed S&P 500 call simulator" :
+      S.fund === "SPEC" ? "defined-target ETF simulator" : "S&P 500 Target 10,000 2030 ETF simulator");
     Array.prototype.forEach.call(document.querySelectorAll(".ix"), function (e) { e.textContent = name; });
     Array.prototype.forEach.call(document.querySelectorAll(".sponly"), function (e) { e.classList.toggle("greyed", !sp); });
     $("slideNote").textContent = sp ? "[MEASURED 2024-26 // FINDINGS F12]" : "[S&P 500 ONLY // SET YOUR OWN]";
