@@ -12,9 +12,13 @@
   against an exact answer (XX's NAV at the target depends only on SPY's level there): worst gap 0.0019 at 200,000
   paths.
 - **No look-ahead** (`montecarlo.causal`, tests/test_lookahead.py): `causal.check(rule, series)` replaces the
-  future after many cut points with different data and requires every earlier output to stay identical; it passes
-  causal rules and catches a centered average, tomorrow's value, a full-sample z-score and a one-row peek at the
-  end. Every path engine (lognormal and bootstrap, CPU and GPU, and the XX layer) reports at session k exactly what
+  future after each cut point with six different futures (reversed, shuffled, flat, a crash, a spike, noise) and
+  requires every earlier output to stay identical, bit for bit; series up to 1,000 rows are cut at every row. It
+  passes causal rules and catches a centered average, tomorrow's value, a full-sample z-score, a one-row peek at
+  the end, a peek on month-ends only (at exactly those 28 cuts) and a rule that peeks only when a crash is coming.
+  It proves that a rule does not read the future; it does not check execution timing (a decision at a close may
+  only earn later returns), parameters fitted on the whole history, or data revised or published late. Every path
+  engine (lognormal and bootstrap, CPU and GPU, and the XX layer) reports at session k exactly what
   a run stopped at k reports, bit for bit; the bootstrap's row choices up to step k do not depend on the path's
   length; and FC1's inputs for an origin ignore every later row. Later strategy rules (v0.3.2) must pass the same
   checker.

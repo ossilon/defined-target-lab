@@ -72,7 +72,43 @@ for name, rule in (("centered 21-session mean", centered_mean), ("tomorrow's val
     bad = causal.check(rule, r)
     check(f"causal.check catches look-ahead: {name} ({len(bad)} cuts)", len(bad) > 0)
 bad = causal.check(tomorrow, r, cuts=[100])
-check("it reports the first output that read the future (tomorrow's value at cut 100: output 100)", bad == [(100, 100)], bad)
+check("it reports the first output that read the future (tomorrow's value at cut 100: output 100, first future "
+      "tried)", bad == [(100, 100, "reversed")], bad)
+
+
+def month_end_peek(x):
+    """Peeks one row ahead only on every 21st session (a rare, date-shaped peek)."""
+    out = x.copy()
+    for i in range(20, x.size - 1, 21):
+        out[i] += x[i + 1]
+    return out
+
+
+def crash_peek(x):
+    """Cuts exposure only when a fall of more than 5% is coming within 5 sessions (peeks only before extremes)."""
+    out = np.ones(x.size)
+    for i in range(x.size):
+        if x[i + 1:i + 6].size and x[i + 1:i + 6].min() < -0.05:
+            out[i] = 0.0
+    return out
+
+
+bad = causal.check(month_end_peek, r)
+month_ends = [k for k in range(20, r.size - 1, 21)]
+check(f"a peek on month-ends only is caught at exactly those {len(month_ends)} cuts and no others (only every cut "
+      "point, the default up to 1,000 rows, is sure to include them)", [k for k, _, _ in bad] == month_ends,
+      [k for k, _, _ in bad][:5])
+check("r has no fall of more than 5%, so crash_peek never fires on the real series", crash_peek(r).min() == 1.0)
+bad = causal.check(crash_peek, r)
+check(f"a rule that peeks only when a crash is coming is caught ({len(bad)} cuts)", len(bad) > 0 and
+      all(f in causal.FUTURES for _, _, f in bad))
+t0 = __import__("time").perf_counter()
+causal.check(trailing_mean, r)
+check("checking 600 sessions at every cut point under 6 futures takes under 10 s",
+      __import__("time").perf_counter() - t0 < 10)
+c5 = causal.default_cuts(5000)
+check("longer series get 100 spread cut points plus the first and last", len(c5) == 101 and c5[0] == 0
+      and c5[-1] == 4998, len(c5))
 raises("a rule must return one output per session", lambda: causal.check(lambda x: x[:-1], r), "one per row")
 
 # ------------------------------------------------------------------ 2. path engines: a prefix never sees the future

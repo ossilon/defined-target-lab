@@ -4,37 +4,65 @@ Plain words
 - A "rule" here is any function that reads a series (rows = sessions, oldest first) and returns one output per
   session: a signal, an exposure, a running measure. Output k is the decision made at session k's close, so it may
   depend on rows 0..k and nothing later.
-- `check` proves that the way it can be proven from outside: at many cut points k, it replaces everything after k
-  with different data (the future reversed, and the future replaced by unrelated numbers) and requires outputs
-  0..k to stay identical, bit for bit. A rule that reads even one future row changes some output at or before its
-  cut, and the check reports where.
-- It does not check execution timing (a decision at k's close may only earn returns from k + 1 on); that is the
-  backtest's job: apply exposure[k] to return[k + 1].
+- `check` proves that the way it can be proven from outside: at cut points k, it replaces everything after k with
+  different futures and requires outputs 0..k to stay identical, bit for bit. A rule that reads even one future row
+  changes some output at or before its cut, and the check reports where.
+- The futures (FUTURES): the rest reversed, shuffled, flat (the last known row repeated), a crash and a spike (ten
+  spreads below and above the mean), and unrelated noise. Harsh futures catch rules that peek only when something
+  extreme is coming; every cut point (the default for series up to 1,000 rows) catches rules that peek only on
+  some dates, such as month-ends.
+- What it does NOT check: execution timing (a decision at k's close may only earn returns from k + 1 on), parameters
+  fitted on the whole history and then fixed (the rule then looks causal), and data that was revised or published
+  late (the check sees the final series). The causal backtest toolkit (v0.3.2 design) covers those.
 - numpy only, like the rest of the engine.
 """
 import numpy as np
 
+FUTURES = ("reversed", "shuffled", "flat", "crash", "spike", "noise")
+ALL_CUTS_UP_TO = 1000            # series up to this many rows get every cut point by default
+SPREAD_CUTS = 100                # longer series: this many cut points spread evenly, plus the first and last
+
 
 def _futures(series, k, rng):
-    """Two different futures after row k: the rest reversed, and unrelated values with the same spread."""
+    """The futures after row k, each the same length as the rest of the series."""
     head, tail = series[:k + 1], series[k + 1:]
-    reversed_tail = tail[::-1].copy()
-    noise = rng.standard_normal(tail.shape) * (np.std(series) + 1.0) + np.mean(series)
-    return [np.concatenate([head, reversed_tail]), np.concatenate([head, noise.astype(series.dtype)])]
+    x = series.astype(float)
+    mean, sd = x.mean(axis=0), x.std(axis=0) + 1e-12
+    shape, dt = tail.shape, series.dtype
+    out = {"reversed": tail[::-1].copy(),
+           "shuffled": tail[rng.permutation(len(tail))],
+           "flat": np.repeat(series[k:k + 1], len(tail), axis=0),
+           "crash": np.broadcast_to(mean - 10.0 * sd, shape).astype(dt),
+           "spike": np.broadcast_to(mean + 10.0 * sd, shape).astype(dt),
+           "noise": (rng.standard_normal(shape) * (sd + 1.0) + mean).astype(dt)}
+    return {name: np.concatenate([head, out[name]]) for name in FUTURES}
 
 
-def _same(a, b):
-    a, b = np.asarray(a), np.asarray(b)
-    floats = a.dtype.kind in "fc" and b.dtype.kind in "fc"       # NaN equals NaN only for float outputs
-    return a.shape == b.shape and np.array_equal(a, b, equal_nan=floats)
+def _first_change(base, out, k):
+    """The first output index 0..k that differs (NaN equals NaN), or -1 if outputs 0..k are identical."""
+    a, b = base[:k + 1], out[:k + 1]
+    if a.shape != b.shape:
+        return 0
+    same = a == b
+    if a.dtype.kind in "fc" and b.dtype.kind in "fc":
+        same |= np.isnan(a) & np.isnan(b)
+    rows = same.reshape(k + 1, -1).all(axis=1)
+    return -1 if rows.all() else int(np.argmin(rows))
+
+
+def default_cuts(n):
+    if n <= ALL_CUTS_UP_TO:
+        return list(range(n - 1))
+    return sorted({0, n - 2, *np.linspace(1, n - 2, SPREAD_CUTS).astype(int).tolist()})
 
 
 def check(rule, series, cuts=None, seed=0):
-    """[(cut, first output index that changed)] for every cut at which the rule read the future; [] if causal.
+    """[(cut, first output index that changed, future)] for every cut at which the rule read the future; [] if
+    causal.
 
-    series: 1-D or 2-D array (rows = sessions). cuts: rows after which the future is replaced (default: about 25
-    points spread over the series, plus the first and the second-to-last rows). The rule must return one output per
-    row (arrays with any number of columns)."""
+    series: 1-D or 2-D array (rows = sessions). cuts: rows after which the future is replaced (default
+    default_cuts: every row for series up to 1,000 rows, else 100 spread evenly). The rule must return one output
+    per row (arrays with any number of columns)."""
     x = np.asarray(series)
     n = x.shape[0]
     if n < 3:
@@ -42,17 +70,14 @@ def check(rule, series, cuts=None, seed=0):
     base = np.asarray(rule(x))
     if base.shape[0] != n:
         raise ValueError(f"the rule returned {base.shape[0]} outputs for {n} rows: it must return one per row")
-    if cuts is None:
-        cuts = sorted({0, n - 2, *np.linspace(1, n - 2, 25).astype(int).tolist()})
     rng = np.random.default_rng(seed)
     bad = []
-    for k in cuts:
+    for k in (default_cuts(n) if cuts is None else cuts):
         if not 0 <= k < n - 1:
             raise ValueError(f"cut {k} outside 0..{n - 2}")
-        for future in _futures(x, k, rng):
-            out = np.asarray(rule(future))
-            same = np.array([_same(base[i], out[i]) for i in range(k + 1)])
-            if not same.all():
-                bad.append((int(k), int(np.argmin(same))))
+        for name, future in _futures(x, k, rng).items():
+            first = _first_change(base, np.asarray(rule(future)), k)
+            if first >= 0:
+                bad.append((int(k), first, name))
                 break
     return bad
