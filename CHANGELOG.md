@@ -57,6 +57,10 @@
 - **Slide-rule test on real history** (`scripts/slide_rule_test.py`, FINDINGS F18): 198 synthetic XXs on real S&P
   paths since 2007, marked with constant vol, the slide rule and real VIX1Y. VIX1Y moves 3.5 times as much as the rule;
   the vol assumption moves XX's drawdowns and peaks by several points, so path statistics carry a model-risk band.
+- **Effective leverage** (`xxpaths.effective_leverage`): the fund's realized move per 1% ETF move on up days and on
+  down days, against its elasticity at the previous close. `scripts/effective_leverage_study.py` and FINDINGS F19:
+  with vol moving against the index, XX, the call inside it and the listed S&P 10,000 call lose the same leverage on
+  both sides and show the same mid-life value gap, so the effect is the option's, not the fund's.
 
 ## v0.2.3 (2026-10-17)
 

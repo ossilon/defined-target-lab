@@ -409,3 +409,27 @@ Consequence for the engine's outputs: XX's path statistics (drawdowns, peaks, to
 the vol rule of several points; report them under at least two vol rules until H4/H10 or the v0.3.x vol model
 settles it. Caveats: 2007-2023 starts include strong rallies (69% touched 2x), so these are not odds; rates were
 held constant (they were near zero in 2009-15 and 2020-21); the 0.77 multiplier is assumed, not fitted.
+
+**F19. The slide-rule effect belongs to the option, not to XX: XX, the bare SPY call inside it and the listed S&P
+10,000 call of December 2029 lose the same effective leverage on up and down days and show the same mid-life
+value gap.** Measured 2026-10-17 (`scripts/effective_leverage_study.py`, `xxpaths.effective_leverage`; outputs fixed
+before the run; one disclosed change after it: days count only while the previous mark is at least 25% of the start,
+because near-worthless bare calls have unbounded elasticity and dominated the first run; 400,000 risk-neutral paths
+per row, 16.6% vol, the real calendar):
+
+| Instrument | Slide | Effective leverage up / down days | Mid-life gap, session 400 (+/- 1 SE) |
+|---|---|---|---|
+| XX (cash, fee) | 0 / 1 / 3.5 points per -10% | 1.009 / 0.990; 0.895 / 0.878; 0.625 / 0.608 | -1.80%; -6.88%; -15.73% (0.2%) |
+| XX's option alone | same | 1.010 / 0.990; 0.895 / 0.878; 0.626 / 0.607 | -0.19%; -5.39%; -14.47% |
+| listed S&P 10,000 call, Dec 2029 | same | 1.010 / 0.989; 0.895 / 0.877; 0.623 / 0.604 | -0.19%; -5.55%; -14.97% |
+
+Effective leverage = the realized move per 1% S&P move divided by the elasticity known at the previous close, pooled
+over paths and days; 1.0 = moved as the elasticity said (curvature alone gives 1.01 / 0.99). XX's -1.80% at constant
+vol is its fee and its flat cash, not the slide. With vol moving against the index, all three move about 11-12% less
+than their elasticity says on both up and down days at the rule's slide, and about 38-40% less at a VIX1Y-sized slide
+(F18).
+
+What it means: the listed call is traded, so under the option price's own (risk-neutral) view its expected discounted
+mark cannot fall 5% by mid-life. If its strike vol truly followed the rule, today's price would already be lower than
+the constant-vol Black-76 value. The test: compare the listed call's real quotes since 2024 (the F12 data; H17 from
+2026-11-01) with both readings, in the v0.3.x vol study.

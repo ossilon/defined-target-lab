@@ -56,13 +56,34 @@ for i in range(6):
         spell = 0 if v > top else spell + 1
         top = max(top, v)
         longest = max(longest, spell)
+    s_all = np.concatenate([[S0], S])
+    n_all = np.concatenate([[n0], nav])
+    lev_py = np.zeros(4)
+    for k in range(60):
+        if n_all[k] < xp.LEV_FLOOR * n0:
+            continue
+        e = sim.leverage(XX, s_all[k], short[k], sim.vol_at(0.17, 0.0, 0.012, s_all[k], S0), M)
+        rs, rn = s_all[k + 1] / s_all[k] - 1, n_all[k + 1] / n_all[k] - 1
+        lev_py += [rn * rs, e * rs * rs, 0, 0] if rs > 0 else [0, 0, rn * rs, e * rs * rs]
+    ok &= bool(np.allclose(os_["leverage_sums"][i], lev_py, rtol=1e-9, atol=1e-15))
     ok &= (abs(os_["nav_end"][i] - nav[-1]) < 1e-9 and abs(os_["nav_max"][i] - max(n0, nav.max())) < 1e-9
            and abs(os_["nav_min"][i] - min(n0, nav.min())) < 1e-9
            and abs(os_["nav_max_drawdown"][i] - max(0.0, float((1 - nav / hi).max()))) < 1e-9
            and os_["sessions_below_start"][i] == int((nav < n0).sum()) and list(os_["first_multiple"][i]) == first
            and os_["longest_underwater"][i] == longest)
-check("every path measure equals a plain-Python recomputation with sim.share_value and sim.vol_at (6 paths, slide on)",
-      ok)
+check("every path measure, including the up/down effective-leverage sums, equals a plain-Python recomputation with "
+      "sim.share_value, sim.vol_at and sim.leverage (6 paths, slide on)", ok)
+kd = xp._delta(900.0, 1.0, T, kinds, signs, strikes, units, XX.fee, R, Q, 0.17, 0.012, S0)
+check("the kernel's share delta equals sim.share_delta at the slide rule's vol",
+      abs(kd - sim.share_delta(XX, 900.0, 1.0, sim.vol_at(0.17, 0.0, 0.012, 900.0, S0), M)) < 1e-12)
+
+# Effective leverage: constant vol sits near 1 (curvature only); a vol that falls as the ETF rises damps both sides
+flat = xp.effective_leverage(o)
+slid = xp.effective_leverage(xp.simulate(11, 200_000, XX, M, S0, times, 0.166, 0.166, slide=0.01))
+check(f"constant vol: effective leverage close to the model's on up and down days ({flat[0]:.3f} / {flat[1]:.3f})",
+      0.9 < flat[1] <= 1.0 <= flat[0] < 1.1, flat)
+check(f"slide rule: effective leverage lower than with constant vol on BOTH up and down days ({slid[0]:.3f} / "
+      f"{slid[1]:.3f})", slid[0] < flat[0] and slid[1] < flat[1], (flat, slid))
 
 # The martingale identity: constant vol, no fee, no cash, risk-neutral drift
 bare = sim.Fund((sim.Leg("call", 1, 995.01, 0.48),))
