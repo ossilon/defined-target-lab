@@ -11,6 +11,15 @@
   `scripts/forecast_check.py`; the daily routine notes a due entry and stops on a late one. Tests judge every model
   against an exact answer (XX's NAV at the target depends only on SPY's level there): worst gap 0.0019 at 200,000
   paths.
+- **Run manifests** (`montecarlo.manifest`, standard library only): every study script (bootstrap, XX paths, slide
+  rule, effective leverage, and the two GPU speed tests) writes `results/manifests/<study>_<date>_<output>.json`
+  with its arguments, seeds, settings, the SHA-256 and size of each input file, the SHA-256 of every code file, the
+  library versions and the SHA-256 of everything it printed. A seeded study run again on the same inputs and code
+  must print the same output (`manifest.same_output`); the four seeded studies reproduce FINDINGS F15, F17, F18 and
+  F19 and their manifests are published. File names only, the date only, no folders or machine names.
+- The identifier scan now catches a Windows home path written with doubled backslashes (as JSON writes it), accepts
+  the forecast log and run manifests (their contents are still scanned), and accepts "analyses" (the American plural
+  of "analysis"). `slide_rule_test.py` prints the VIX1Y file's fetch date, not its time.
 - **`definedtarget.montecarlo`**, the start of a Monte Carlo engine that imports nothing else from the package, so
   other projects can use it unchanged. Step 1: counter-based random numbers (Philox4x32-10) addressed by (seed, path,
   draw, stream), 52-bit uniforms that are never 0 or 1, and Wichura's AS241 inverse normal. Results do not depend on

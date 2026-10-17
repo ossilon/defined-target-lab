@@ -50,6 +50,35 @@ for stem, end in (("analy", "se"), ("analy", "sed"), ("analy", "sing"), ("Analy"
 for word in ("analyses of the saved forecasts", "analyzes", "analyzed", "analysis", "behavior", "modeled", "center"):
     check(f"'{word}' passes", brit.search(f"the {word} here") is None)
 
+# 2c. The forecast-check log (FC1) and run manifests are published and pass, even after 39 months of entries; a JSON
+#     file elsewhere still fails, and their contents are still scanned.
+from datetime import datetime, timezone  # noqa: E402
+
+from definedtarget.forward import forecast as fc  # noqa: E402
+
+with tempfile.TemporaryDirectory() as tmp:
+    log = Path(tmp) / "forecast_log.jsonl"
+    when = datetime(2030, 2, 1, tzinfo=timezone.utc)
+    for t, T in fc.origins():
+        rec = {"origin": t.isoformat(), "target": T.isoformat(), "seed": fc.seed_for(t), "paths": fc.PATHS,
+               "models": {m: {} for m in fc.MODELS}}
+        fc.append_log(fc.forecast_entry(rec, code={"definedtarget/forward/forecast.py": "0" * 64}), log, now=when)
+        pits = {m: {"xx": 0.1234, "spy": 0.5678} for m in fc.MODELS}
+        fc.append_log(fc.outcome_entry(rec, pits), log, now=when)
+    man = Path(tmp) / "m.json"
+    man.write_text('{"kind": "run manifest", "seeds": [20261017], "date_utc": "2026-10-18"}\n', encoding="utf-8")
+    leak = Path(tmp) / "leak.json"
+    leak.write_text('{"input": "C:\\\\Users\\\\someone\\\\x.csv"}\n', encoding="utf-8")
+    probs = scan_ids.scan([("forward/forecast_log.jsonl", log), ("results/manifests/m.json", man),
+                           ("results/manifests/leak.json", leak), ("results/other.json", man)], handle="", url="")
+    check("a full 39-month forecast log passes the scan", not any(p.startswith("forward/forecast_log") for p in probs),
+          probs[:3])
+    check("a run manifest passes the scan", not any(p.startswith("results/manifests/m.json") for p in probs), probs)
+    check("a manifest's contents are still scanned (a home path fails)",
+          any(p.startswith("results/manifests/leak.json") for p in probs), probs)
+    check("a JSON file outside results/manifests/ still fails", any(p.startswith("results/other.json") for p in probs),
+          probs)
+
 # 3. The scan refuses a data file and a pasted series (synthetic files in a temporary folder).
 with tempfile.TemporaryDirectory() as tmp:
     csv = Path(tmp) / "prices.csv"

@@ -34,6 +34,7 @@ import numpy as np  # noqa: E402
 from definedtarget import calendar as nyse  # noqa: E402
 from definedtarget.montecarlo import bootstrap as bs  # noqa: E402
 from definedtarget.montecarlo import gpu  # noqa: E402
+from definedtarget.montecarlo import manifest  # noqa: E402
 from definedtarget.montecarlo import paths as lp  # noqa: E402
 
 FIELDS = "temperature.gpu,clocks.sm,clocks.mem,power.draw,fan.speed,utilization.gpu"
@@ -156,4 +157,8 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    with manifest.run("gpu_stress_test", sys.argv[1:], REPO / "results" / "manifests", REPO,
+                      ("definedtarget/**/*.py", "scripts/gpu_stress_test.py"), deterministic=False) as run:
+        rc = main(sys.argv[1:])
+    print(f"run manifest: results/manifests/{run['path'].name}")
+    sys.exit(rc)

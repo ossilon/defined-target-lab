@@ -7,6 +7,7 @@ GPU checks run only where CuPy and an NVIDIA GPU are present.
 """
 import ast
 import math
+import sys
 import time
 from pathlib import Path
 
@@ -90,8 +91,9 @@ chi2 = float(((cells - 1e4) ** 2 / 1e4).sum())
 check("uniforms fill 100 equal cells evenly (chi-square within 6 sd of its 99 degrees of freedom)",
       abs(chi2 - 99) < 6 * math.sqrt(2 * 99), chi2)
 
-# 6. The package stays project-agnostic: it imports only math, numpy, numba (and cupy in gpu.py)
-allowed = {"math", "numpy", "numba", "cupy"}
+# 6. The package stays project-agnostic: it imports only Python's standard library, numpy, numba (and cupy in gpu.py)
+allowed = {"numpy", "numba", "cupy"} | set(sys.stdlib_module_names)
+check("definedtarget is not a standard-library name (the allowed set cannot let it in)", "definedtarget" not in allowed)
 bad = []
 for f in sorted(PKG.glob("*.py")):
     for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):

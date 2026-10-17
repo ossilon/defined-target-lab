@@ -32,6 +32,7 @@ import numba  # noqa: E402
 import numpy as np  # noqa: E402
 
 from definedtarget import pricing  # noqa: E402
+from definedtarget.montecarlo import manifest  # noqa: E402
 
 # The README's 2026-10-13 example: SPY 778.01, forward to expiry 882.2603, rate 4.86498%, 3.2465753 years
 S0, F, K, R, T, VOL = 778.01, 882.2603, 995.01, 0.0486498, 3.2465753, 0.166
@@ -149,4 +150,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    with manifest.run("b17a_gpu_first_test", sys.argv[1:], REPO / "results" / "manifests", REPO,
+                      ("definedtarget/**/*.py", "scripts/b17a_gpu_first_test.py"), deterministic=False) as run:
+        main()
+    print(f"run manifest: results/manifests/{run['path'].name}")

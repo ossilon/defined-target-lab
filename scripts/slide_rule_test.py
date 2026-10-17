@@ -33,7 +33,8 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from definedtarget import pricing, sim  # noqa: E402
-from definedtarget.forward import parse  # noqa: E402
+from definedtarget.forward import fetch, parse  # noqa: E402
+from definedtarget.montecarlo import manifest  # noqa: E402
 
 LIFE, EVERY, M_MULT, SLIDE = 815, 21, 0.77, 0.01
 K, CASH, FEE, R, Q = 1.27892, 0.2474 / 778.01, 0.0099, 0.0486498, 0.0103
@@ -45,7 +46,8 @@ def load():
     v = pd.read_csv(io.StringIO(parse.read_text(None, rec)))
     v["date"] = pd.to_datetime(v["DATE"], format="%m/%d/%Y")
     df = spx.merge(v[["date", "CLOSE"]].rename(columns={"CLOSE": "vix1y"}), on="date").sort_values("date")
-    return df.reset_index(drop=True), rec["fetched_utc"]
+    # the fetch DATE only: public text carries no clock times of the author's activity
+    return df.reset_index(drop=True), rec["fetched_utc"][:10], fetch.data_dir(None) / rec["path"]
 
 
 def navs(S, t, vols):
@@ -72,7 +74,17 @@ def life_stats(nav):
 
 
 def main():
-    df, fetched = load()
+    spx_path = REPO / "data" / "external" / "spx_daily_library.csv"
+    df, fetched, vix_path = load()
+    with manifest.run("slide_rule_test", sys.argv[1:], REPO / "results" / "manifests", REPO,
+                      ("definedtarget/**/*.py", "scripts/slide_rule_test.py"),
+                      inputs={"spx": spx_path, "vix1y": vix_path},
+                      settings={"life": LIFE, "every": EVERY, "m": M_MULT, "slide": SLIDE}) as m:
+        report(df, fetched)
+    print(f"run manifest: results/manifests/{m['path'].name}")
+
+
+def report(df, fetched):
     S_all, V_all = df["close"].to_numpy(float), df["vix1y"].to_numpy(float) / 100.0
     dates = df["date"].to_numpy()
     print(f"S&P 500 and VIX1Y on common sessions: {pd.Timestamp(dates[0]).date()} to {pd.Timestamp(dates[-1]).date()} "

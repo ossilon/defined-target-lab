@@ -26,7 +26,8 @@ REPO = Path(__file__).resolve().parents[1]
 TEXT_SUFFIXES = {".py", ".md", ".txt", ".json", ".toml", ".cfg", ".ini", ".yml", ".yaml", ".html", ".js", ".css",
                  ".csv", ".gitignore", ".cff", ".svg", ""}
 GENERIC = {
-    "home directory path": re.compile(r"[A-Za-z]:\\Users\\[^\\\s]+|/home/[a-z0-9_-]+|/Users/[A-Za-z0-9_-]+"),
+    # one or two backslashes: JSON doubles every backslash in a Windows path (found 2026-10-18)
+    "home directory path": re.compile(r"[A-Za-z]:\\{1,2}Users\\{1,2}[^\\\s]+|/home/[a-z0-9_-]+|/Users/[A-Za-z0-9_-]+"),
     "email address": re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
     "possible secret": re.compile(r"(?i)(api[_-]?key|secret|token|password)\s*[:=]\s*['\"][^'\"]{8,}"),
     # public style rule: plain American English (catches common British spellings). "analyses" passes: it is also
@@ -42,9 +43,11 @@ DATA_SUFFIXES = {".csv", ".json", ".jsonl", ".xls", ".xlsx", ".pdf", ".parquet"}
 ALLOWED_DATA_DIRS = ("definedtarget/funds/", "docs/")
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 ALLOWED_IMAGE_DIRS = ("docs/img/",)
-# The frozen prediction ledger must be public (it proves pre-registration). It holds text only; the scan still
-# checks its contents like any text file.
-ALLOWED_DATA_FILES = {"forward/predictions.jsonl"}
+# The frozen prediction ledger and the forecast-check log (FC1) must be public (they prove pre-registration). They
+# hold text only (the log: dates, fingerprints and PITs); the scan still checks their contents like any text file.
+ALLOWED_DATA_FILES = {"forward/predictions.jsonl", "forward/forecast_log.jsonl"}
+# Run manifests (montecarlo.manifest): fingerprints, settings and versions, no data; contents scanned too.
+ALLOWED_MANIFEST_DIR = "results/manifests/"
 # Attribution: where the handle may stand, per file (the handle must follow this prefix directly).
 ATTRIBUTION_PREFIX = {"LICENSE": r"^Copyright \(c\) \d{4} ",
                       "CITATION.cff": r"^\s*-\s*(?:name|alias):\s*\"?",
@@ -192,7 +195,7 @@ def scan(files=None, personal=(), handle=None, url=None):
             if rx.search(rel):
                 problems.append(f"{rel}: personal term /{rx.pattern}/ in the file name")
         suffix = path.suffix.lower()
-        allowed_file = rel in ALLOWED_DATA_FILES
+        allowed_file = rel in ALLOWED_DATA_FILES or (rel.startswith(ALLOWED_MANIFEST_DIR) and suffix == ".json")
         if suffix in DATA_SUFFIXES and not rel.startswith(ALLOWED_DATA_DIRS) and not allowed_file:
             problems.append(f"{rel}: data file; git would publish it")
             continue

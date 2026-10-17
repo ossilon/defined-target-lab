@@ -44,6 +44,7 @@ import pandas as pd  # noqa: E402
 
 from definedtarget import calendar as nyse  # noqa: E402
 from definedtarget.montecarlo import bootstrap as bs  # noqa: E402
+from definedtarget.montecarlo import manifest  # noqa: E402
 from definedtarget.montecarlo import paths as lp  # noqa: E402
 
 S0, F_EX, T_EX, R_EX = 778.01, 882.2603, 3.2465753, 0.0486498
@@ -154,12 +155,17 @@ def main(argv):
     ap.add_argument("--paths", type=int, default=1_000_000)
     a = ap.parse_args(argv)
     spx_path = Path(a.spx) if a.spx else REPO / "data" / "external" / "spx_daily_library.csv"
-    d_spx, r_spx = load_spx(spx_path)
-    d_fr, r_fr = load_french(find("F-F_Research_Data_Factors_daily.csv", a.french))
-    print(f"S&P 500 price: {d_spx[0]} to {d_spx[-1]}, {r_spx.size:,} daily returns; US market total return (French): "
-          f"{d_fr[0]} to {d_fr[-1]}, {r_fr.size:,}\n")
-    part_a(d_spx, r_spx, a.paths, 814)
-    part_b([("S&P 500 1950-2026", r_spx), ("US market 1926-2026", r_fr)], a.paths)
+    fr_path = find("F-F_Research_Data_Factors_daily.csv", a.french)
+    with manifest.run("bootstrap_study", argv, REPO / "results" / "manifests", REPO,
+                      ("definedtarget/**/*.py", "scripts/bootstrap_study.py"), seeds=[SEED],
+                      inputs={"spx": spx_path, "french": fr_path}, settings={"paths": a.paths, "blocks": BLOCKS}) as m:
+        d_spx, r_spx = load_spx(spx_path)
+        d_fr, r_fr = load_french(fr_path)
+        print(f"S&P 500 price: {d_spx[0]} to {d_spx[-1]}, {r_spx.size:,} daily returns; US market total return "
+              f"(French): {d_fr[0]} to {d_fr[-1]}, {r_fr.size:,}\n")
+        part_a(d_spx, r_spx, a.paths, 814)
+        part_b([("S&P 500 1950-2026", r_spx), ("US market 1926-2026", r_fr)], a.paths)
+    print(f"run manifest: results/manifests/{m['path'].name}")
 
 
 if __name__ == "__main__":

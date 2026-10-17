@@ -3,7 +3,7 @@
 
     py -I scripts\\capture_listed.py --symbols              print the symbols to request, as JSON
     py -I scripts\\capture_listed.py <reply.json>           file a saved reply, read now
-    py -I scripts\\capture_listed.py <reply.json> --read-utc 2026-10-16T22:15:00Z
+    py -I scripts\\capture_listed.py <reply.json> --read-utc YYYY-MM-DDTHH:MM:SSZ
     py -I scripts\\capture_listed.py --compare 2026-10-16   inside vs outside P2's window, for one close
 
 The scheduled task calls `--symbols`, asks the TradingView connection for those symbols, saves the reply unchanged,

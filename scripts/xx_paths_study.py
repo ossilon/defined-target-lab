@@ -28,6 +28,7 @@ import numpy as np  # noqa: E402
 
 from definedtarget import calendar as nyse, sim  # noqa: E402
 from definedtarget import xxpaths as xp  # noqa: E402
+from definedtarget.montecarlo import manifest  # noqa: E402
 from definedtarget.montecarlo import paths as lp  # noqa: E402
 
 S0, R = 778.01, 0.0486498
@@ -67,4 +68,8 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    with manifest.run("xx_paths_study", sys.argv[1:], REPO / "results" / "manifests", REPO,
+                      ("definedtarget/**/*.py", "scripts/xx_paths_study.py"), seeds=[2026]) as run:
+        rc = main(sys.argv[1:])
+    print(f"run manifest: results/manifests/{run['path'].name}")
+    sys.exit(rc)
