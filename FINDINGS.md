@@ -351,3 +351,31 @@ the lognormal turns every random number into a normal with about 30 64-bit opera
 arithmetic at 1/64 of its 32-bit rate, so that kernel is limited by arithmetic and draws only about half the card's
 power. A 32-bit lognormal kernel is the next speed step, with its accuracy measured against the 64-bit one. GPU and
 CPU values agree to the last digit except about 1 in 40,000 tail normals, where NVIDIA's log rounds differently.
+
+**F17. Path by path, XX doubles at some point in about half of all futures but ends up in about a quarter, and the
+"vol follows the index" rule pulls its expected mid-life mark about 5% below today's price.** Measured 2026-10-17
+(`definedtarget/xxpaths.py`, `scripts/xx_paths_study.py`; outputs fixed in the script before the run; 1 million
+lognormal paths per row; XX's 2026-10-13 example, 815 real sessions; 16.6% realized and implied vol; model start NAV
+26.49 against the published 26.51). The real-world drifts are assumptions, not forecasts.
+
+| SPY drift | P(end above start) | P(end below 10% of start) | P(NAV reached 2x / 5x / 10x at some session) | P(reached 2x, ended below it) | Mean largest drawdown | P(XX beat SPY) |
+|---|---|---|---|---|---|---|
+| risk-neutral (mean 3.87%/yr) | 23.1% | 71.5% | 49.3% / 16.7% / 3.7% | 31.2% | 93.9% | 21.1% |
+| median 7%/yr price growth | 39.3% | 54.1% | 63.5% / 29.4% / 9.0% | 30.8% | 89.2% | 36.8% |
+| median 10%/yr | 51.2% | 42.2% | 72.3% / 39.7% / 14.7% | 28.1% | 85.3% | 48.5% |
+
+With the slide rule at 1 point per -10% (F12), the end-of-life numbers do not change (the payoff ignores vol) and the
+chance of touching 2x along the way falls 3-4 points (45.5% / 60.2% / 69.6%), because vol falls as SPY rises. The
+risk-neutral profit chance (23.1%) matches the 23% that F13 read from the option price by a different route.
+
+The martingale gap (risk-neutral drift, no fee, no cash): under constant vol the discounted mark averages to today's
+price, as it must (+0.11%, +0.15%, +0.18%, +0.18% at sessions 100, 400, 700 and expiry; all within 2 standard errors).
+With the slide rule it does not: -2.27% (SE 0.05%), -5.05% (0.13%), -2.34% (0.21%), then +0.18% at expiry. A vendor
+whose marks followed this rule would show XX's mid-life NAVs below what today's option price implies, on average.
+Either the rule is not how the market moves long-dated vol (F12 measured it on two years of one listed option), or
+today's price embeds a dynamic the rule leaves out (the skew moving with the index). This is the depth pass's
+"mystery 1"; the v0.3.x vol model and the real-path test against VIX1Y are where it gets resolved.
+
+Caveats: lognormal paths at one vol; fee taken by selling options, cash flat (sim.py's model, not the full fund
+engine); no FLEX trading costs, closure or roll scenarios; touch probabilities count every session, which is not a
+trading result (a sale at 2x pays the bid, after costs, on a day you must recognize).

@@ -48,6 +48,12 @@
   2.4x and 16x faster than 24 CPU threads. `scripts/gpu_stress_test.py` runs them at full load for a set time with
   temperature logging, a temperature stop and CPU spot checks (FINDINGS F16: 5 minutes, 0.75 trillion path-steps,
   66 C peak, 0 mismatches).
+- **XX along every path** (`definedtarget/xxpaths.py`, the XX layer on top of the engine): the fund repriced each
+  session with the simulator's model (Black-76, fee, cash, the slide rule), with NAV drawdowns, time underwater,
+  first touches of 2x / 5x / 10x and XX against SPY. Judged against sim.share_value, the payoff, a plain-Python
+  recomputation of whole paths, and the martingale identity. `scripts/xx_paths_study.py` and FINDINGS F17: at the
+  risk-neutral drift XX touches 2x in 49% of futures but ends above its start in 23%; the slide rule pulls the
+  expected mid-life mark about 5% below today's price, an open question for the vol model.
 
 ## v0.2.3 (2026-10-17)
 
