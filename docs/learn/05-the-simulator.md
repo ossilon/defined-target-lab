@@ -41,7 +41,7 @@ of stretches 22.5% or more, and the best 40% (FINDINGS F13).
 
 - **SPX 10000C DEC-29**: one listed S&P 500 call contract (strike 10,000, expiring 2029-12-21), per contract, with
   no fee and no cash. Type the ask your broker shows, times 100. It answers "XX or the option itself?"
-- **+ SPEC**: any fund made of option legs plus cash, described in a few lines. Two examples load with one click: a`n  hypothetical SPY call spread and a hypothetical QQQ fund that pays above NDX 50,000 on 2030-01-10 (its finish line`n  needs about 16% a year of NDX growth, twice XX's pace). Example:
+- **+ SPEC**: any fund made of option legs plus cash, described in a few lines. Three examples load with one click: a`n  hypothetical SPY call spread; a hypothetical QQQ fund that pays above NDX 50,000 on 2030-01-10 (about 16% a year`n  of NDX growth, twice XX's pace); and a hypothetical DIA fund that pays above DJIA 75,000 (about 12% a year). The`n  Dow example follows the design of a filed, not yet launched Dow 75,000 Target 2030 fund; its strike, options per`n  share and cash are assumed. Example:
 
 ```json
 {"name": "Hypothetical call-spread target fund", "index": "S&P 500", "etf": "SPY", "target": "2030-01-10",

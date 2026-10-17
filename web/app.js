@@ -32,7 +32,15 @@
       index_per_etf_target: 41.167, cash: 0.25, fee: 0.99,
       legs: [{kind: "call", sign: 1, strike: 1214.57, units: 0.76}],
       example_market: {etf: 750, index: 30825, div_yield: 0.55, vol: 21,
-                       note: "illustrative round numbers near October 2026 levels (NDX is about 41.1 x QQQ), not quotes"}}
+                       note: "illustrative round numbers near October 2026 levels (NDX is about 41.1 x QQQ), not quotes"}},
+    "DIA DJIA 75,000": {
+      name: "Hypothetical DJIA 75,000 target fund", index: "Dow Jones Industrial Average", etf: "DIA",
+      target: "2030-01-10", index_per_etf_target: 100.397, cash: 0.25, fee: 0.99,
+      legs: [{kind: "call", sign: 1, strike: 747.03, units: 1.79}],
+      example_market: {etf: 520, index: 52093, div_yield: 1.6, vol: 15,
+                       note: "illustrative round numbers near October 2026 levels (DJIA is about 100.2 x DIA), not " +
+                             "quotes. The design follows a filed Dow 75,000 Target 2030 fund that has not launched; its " +
+                             "strike, options per share and cash here are assumed"}}
   };
   // ETFs whose index we know: a spec may leave "index" out, and may not contradict these
   var ETF_INDEX = {SPY: "S&P 500", VOO: "S&P 500", IVV: "S&P 500", SPLG: "S&P 500", SPYM: "S&P 500",
