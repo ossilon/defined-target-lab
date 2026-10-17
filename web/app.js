@@ -176,10 +176,20 @@
     if (v.bad.length) { note.innerHTML = '<span class="err">check: ' + esc(v.bad.join(", ")) + "</span>"; return; }
     var M = model(v);
     if (!isFinite(M.vol) || M.vol <= 0) {
-      note.innerHTML = '<span class="err">No volatility gives that price (it must be above the cash and below the ' +
-        "price at very high volatility; a fund that sells options may need a typed vol). Check the inputs or type a vol.</span>";
+      // The inputs describe one moment: this price cannot go with this market. Say why, and offer the fair price.
+      var per = F().per, lo = Infinity, hi = -Infinity, ref = S.lastVol || 0.166;
+      for (var n = 0; n <= 60; n++) {
+        var val = E.shareValue(M.fund, v.etf, 0, 1e-4 * Math.pow(3 / 1e-4, n / 60), M.m);
+        lo = Math.min(lo, val); hi = Math.max(hi, val);
+      }
+      var fair = round(E.shareValue(M.fund, v.etf, 0, ref, M.m), per === "contract" ? 0 : 2);
+      note.innerHTML = '<span class="err">With these market inputs one ' + per + " is worth between $" + fmt(lo, 2) + " and $" +
+        fmt(hi, 2) + " at any volatility, so a price of $" + fmt(v.paid, 2) + " cannot go with them.</span> The inputs describe one " +
+        "moment: change the price too, or " + '<button class="k am" type="button" data-fair="' + fair + '">USE FAIR PRICE $' +
+        fmt(fair, per === "contract" ? 0 : 2) + " (AT " + pct(ref, 2) + " VOL)</button>";
       return;
     }
+    if (!S.volTyped) S.lastVol = M.vol;
     note.innerHTML = S.fromLink ? "Inputs came from the link (after the #)." : (F().note ? F().note + " " : "") +
       "Market inputs: dated example (close of " + MARKET.date + "); type today's numbers to update every figure.";
     $("rangeOut").textContent = " +" + (1.5 * S.range) + "% / -" + S.range + "%";
@@ -453,6 +463,10 @@
       });
     });
     $("solve").addEventListener("click", function () { S.volTyped = false; render(); });
+    $("inNote").addEventListener("click", function (e) {      // "USE FAIR PRICE": reprice at the last good vol
+      var b = e.target.closest ? e.target.closest("button[data-fair]") : null;
+      if (b) { $("paid").value = b.getAttribute("data-fair"); S.volTyped = false; render(); }
+    });
     $("reset").addEventListener("click", function () {
       S.fromLink = false; loadFund(S.fund); history.replaceState(null, "", location.pathname + location.search); render();
     });
