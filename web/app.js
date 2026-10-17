@@ -23,7 +23,8 @@
            note: "Price paid is a model value at 16.6% vol: type the fund's real price."}
   };
   var SPEC_EXAMPLE = {
-    name: "Hypothetical call-spread target fund", etf: "SPY", target: "2030-01-10", index_per_etf_target: 10.045,
+    name: "Hypothetical call-spread target fund", index: "S&P 500", etf: "SPY", target: "2030-01-10",
+    index_per_etf_target: 10.045,
     cash: 0.3, fee: 0.95,
     legs: [{kind: "call", sign: 1, strike: 900, units: 0.5}, {kind: "call", sign: -1, strike: 1100, units: 0.5}]
   };
@@ -58,6 +59,23 @@
   function colLabel(ms) { var d = new Date(ms); return MON[d.getUTCMonth()] + "<br>" + String(d.getUTCFullYear()).slice(2); }
   function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
   function F() { return FUNDS[S.fund]; }
+  // The index the fund tracks. The S&P 500 evidence on the page (F10 skew, F12 slide, F13 history) fits only S&P funds.
+  function isSP() { return S.fund !== "SPEC" || /s\s*&\s*p|500/i.test(S.spec.index || "S&P 500"); }
+  function ixName() { return isSP() ? "S&P" : String(S.spec.index); }
+  function replaceText(node, a, b) {                   // swap a word in the text of an already-built element
+    if (!node || a === b) return;
+    var w = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null, false), n;
+    while ((n = w.nextNode())) if (n.nodeValue.indexOf(a) >= 0) n.nodeValue = n.nodeValue.split(a).join(b);
+  }
+  function relabel() {
+    var name = ixName(), sp = isSP();
+    Array.prototype.forEach.call(document.querySelectorAll(".ix"), function (e) { e.textContent = name; });
+    Array.prototype.forEach.call(document.querySelectorAll(".sponly"), function (e) { e.classList.toggle("greyed", !sp); });
+    $("slideNote").textContent = sp ? "[MEASURED 2024-26 // FINDINGS F12]" : "[S&P 500 ONLY // SET YOUR OWN]";
+    if (!sp) ["tape", "sum", "grid", "graph", "gridTitle", "gridNote", "readout", "odds", "oddsNote"].forEach(function (id) {
+      replaceText($(id), "S&P", name);
+    });
+  }
   function round(x, d) { var k = Math.pow(10, d); return Math.round(x * k) / k; }
   function mu() { return S.muKey === "c" ? S.customMu : MUS[S.muKey]; }
 
@@ -77,6 +95,8 @@
     if (!(utc(s.target) > 0)) throw new Error("\"target\" must be a date like 2030-01-10");
     if (!(s.cash >= 0) || !(s.fee >= 0)) throw new Error("\"cash\" and \"fee\" must be numbers >= 0");
     if (s.index_per_etf_target !== undefined && !(s.index_per_etf_target > 0)) throw new Error("\"index_per_etf_target\" must be > 0");
+    if (s.index !== undefined && (typeof s.index !== "string" || !s.index.trim() || s.index.length > 30))
+      throw new Error("\"index\" must be a short name such as \"S&P 500\" or \"Nasdaq-100\"");
     return s;
   }
   function setMarket(f) {
@@ -171,6 +191,7 @@
 
   // ---------- render ----------
   function render() {
+    relabel();                                         // labels follow the fund's index even if we stop early below
     var v = readInputs(), note = $("inNote");
     $("volNote").innerHTML = S.volTyped ? "&lt;- TYPED (SOLVE VOL to undo)" : "&lt;- SOLVED FROM PRICE";
     $("solve").disabled = !S.volTyped;
@@ -193,12 +214,14 @@
     }
     if (!S.volTyped) S.lastVol = M.vol;
     note.innerHTML = S.fromLink ? "Inputs came from the link (after the #)." : (F().note ? F().note + " " : "") +
-      "Market inputs: dated example (close of " + MARKET.date + "); type today's numbers to update every figure.";
+      (isSP() ? "Market inputs: dated example (close of " + MARKET.date + "); type today's numbers to update every figure." :
+       '<span style="color:var(--amb)">The example market inputs are SPY and the S&amp;P 500: type your fund\'s ETF price, its ' +
+       "index level, rate and dividend yield.</span>");
     $("rangeOut").textContent = " +" + (1.5 * S.range) + "% / -" + S.range + "%";
     renderTape(v, M); renderTitle(v); renderSummary(v, M);
     if (S.mode === "graph") renderGraph(v, M); else renderGrid(v, M);
     $("grid").hidden = S.mode === "graph"; $("graph").hidden = S.mode !== "graph";
-    renderOdds(v, M); renderNfo();
+    renderOdds(v, M); renderNfo(); relabel();
   }
 
   function renderTape(v, M) {
@@ -312,7 +335,8 @@
       " Last column: chance the S&amp;P finishes above that level on " + esc($("target").value) + " (" +
       (mu() === null ? "risk-neutral: a price, not a forecast" : "mean total return " + pct(mu(), 0) + "/yr") +
       "; pick another in the odds table). Odds use today's implied vol; the shift and slide change the grid's values only." +
-      " One volatility for every strike: listed options price the odds of finishing above the strike about 10 points higher (FINDINGS F10).";
+      " One volatility for every strike" + (isSP() ? ": listed options price the odds of finishing above the strike about 10 points higher (FINDINGS F10)." :
+      ", so the volatility skew is ignored.");
   }
 
   function renderGraph(v, M) {
@@ -371,6 +395,7 @@
       "%)" + (f.underlying === "index" ? "" : " &#9474; " + esc($("etfLbl").textContent) + " " + fmt(d.S, 2)) + " &#9474; VOL " + pct(d.vol, 2) +
       " &#9474; VALUE $" + fmt(d.val, 2) + " &#9474; P/L " + money(d.pl) + " (" + signed(d.pl / paid * 100, 1) + "%) &#9474; LEVERAGE " +
       (isFinite(d.lev) ? d.lev.toFixed(1) + "x" : "--");
+    replaceText($("readout"), "S&P", ixName());
     var prev = document.querySelector("#grid td.sel");
     if (prev) prev.classList.remove("sel");
     var td = document.querySelector('#grid td[data-i="' + i + '"][data-j="' + j + '"]');

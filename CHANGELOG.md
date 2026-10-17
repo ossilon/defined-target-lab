@@ -19,7 +19,9 @@
   odds rows up to a 24% mean total return plus a custom row checked against history (FINDINGS F13,
   `scripts/history_windows.py`); a link at the end of the daily report opens the simulator with that close's inputs.
   Volatility is solved on the rising side of the value curve, so call spreads work. Scripts load with a version tag,
-  so browsers never mix an old engine with a new page.
+  so browsers never mix an old engine with a new page. A spec names its index; for an index other than the S&P 500
+  the page relabels itself and greys out the S&P-only evidence (F10, F12, F13). An impossible price gets an
+  explanation and a one-click fair price; SOLVE VOL and EXAMPLE confirm what they did.
 - **docs/learn/05**: how to read the simulator.
 - **Volatility slide measured** (FINDINGS F12, `scripts/measure_vol_slide.py`): the 3-year vol at XX's strike rises
   about 1 point per 10% S&P fall, a fifth of VIX1Y's 4.6.

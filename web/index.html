@@ -59,7 +59,7 @@ tr.fin td{text-align:left;color:var(--amb);padding:1px 5px;font-size:11px;white-
 .note{color:var(--dim);font-size:11px;margin-top:6px}
 .err{color:var(--red)}
 textarea{width:100%;background:#020;color:var(--fg);border:1px solid var(--dim);font:12px/1.35 inherit;font-family:inherit;padding:6px;margin-top:6px}
-input:disabled{opacity:.45}
+input:disabled{opacity:.45} .greyed{opacity:.4}
 #graph{line-height:1.15;color:var(--dim);padding:4px 0}
 #graph .g0{color:#7fae8c} #graph .g1{color:var(--dim)} #graph .g2{color:#9dff9d} #graph .g3{color:var(--fg);text-shadow:0 0 5px rgba(51,255,102,.6)}
 #graph .gf{color:var(--amb)} #graph .gp{color:var(--red)}
@@ -80,7 +80,7 @@ a{color:var(--amb)}
 <div class="fields">
 <label class="f"><i>PRICE PAID $</i><input type="text" id="paid" inputmode="decimal"></label>
 <label class="f" id="etfField"><i id="etfLbl">SPY</i><input type="text" id="etf" inputmode="decimal"></label>
-<label class="f"><i>S&amp;P</i><input type="text" id="idx" inputmode="decimal"></label>
+<label class="f"><i class="ix">S&amp;P</i><input type="text" id="idx" inputmode="decimal"></label>
 <label class="f"><i>DATE</i><input type="date" id="date"></label>
 <label class="f" title="Continuously compounded interest rate to the target date (US Treasury zero rate)"><i>RATE %</i><input type="text" id="rate" inputmode="decimal"></label>
 <label class="f" title="The ETF's dividend yield (continuous). SPY: about 1%"><i>DIV YLD %</i><input type="text" id="q" inputmode="decimal"></label>
@@ -96,11 +96,11 @@ a{color:var(--amb)}
 <label class="f" title="Cash per share: what is left if the options expire worthless"><i>CASH $</i><input type="text" id="cash" inputmode="decimal"></label>
 <label class="f" title="Yearly fee, paid by selling options (conservative)"><i>FEE %</i><input type="text" id="fee" inputmode="decimal"></label>
 <label class="f"><i>TARGET DATE</i><input type="date" id="target"></label>
-<label class="f" title="The S&P level the strike corresponds to on the target date (FINDINGS F7: ~9,995 for XX)"><i>S&amp;P FINISH LINE</i><input type="text" id="finish" inputmode="decimal"></label>
-<label class="f" id="ratioField" title="S&P points per ETF dollar today. Typing the ETF fills in the S&P with it, and the other way round"><i>S&amp;P PER <span id="ratioLbl">SPY</span> TODAY</i><input type="text" id="ratio" inputmode="decimal"></label>
+<label class="f" title="The S&P level the strike corresponds to on the target date (FINDINGS F7: ~9,995 for XX)"><i><span class="ix">S&amp;P</span> FINISH LINE</i><input type="text" id="finish" inputmode="decimal"></label>
+<label class="f" id="ratioField" title="S&P points per ETF dollar today. Typing the ETF fills in the S&P with it, and the other way round"><i><span class="ix">S&amp;P</span> PER <span id="ratioLbl">SPY</span> TODAY</i><input type="text" id="ratio" inputmode="decimal"></label>
 </div></details>
 <div id="specBox" hidden>
-<div class="note">Describe any defined-target fund: option legs per share (kind call/put, sign 1 bought / -1 sold, strike in ETF dollars, units = one-share options per fund share), cash per share, fee %/yr, the target date, and S&amp;P points per ETF dollar on that date.</div>
+<div class="note">Describe any defined-target fund: option legs per share (kind call/put, sign 1 bought / -1 sold, strike in ETF dollars, units = one-share options per fund share), cash per share, fee %/yr, the target date, the index the fund tracks (e.g. "S&amp;P 500", "Nasdaq-100"), and index points per ETF dollar on that date.</div>
 <textarea id="spec" rows="9" spellcheck="false" aria-label="Fund spec (JSON)"></textarea>
 <div class="keys"><button class="k" type="button" id="specApply">LOAD SPEC</button><span class="note" id="specNote"></span></div>
 </div>
@@ -112,10 +112,10 @@ a{color:var(--amb)}
 <div class="box"><h2>[ VOLATILITY ]</h2>
 <div class="row"><span>VOL SHIFT</span><span style="white-space:nowrap">-8 <input type="range" id="shift" min="-8" max="12" step="0.5" value="0" aria-label="Volatility shift in points" style="vertical-align:middle"> +12</span><span style="white-space:nowrap">[ <b id="shiftOut">+0.0 PTS</b> ]</span></div>
 <div class="keys" id="presets"></div>
-<div class="row">VOL FOLLOWS S&amp;P <button class="k on" id="slideOn" aria-pressed="true">ON</button>
-<label><input type="text" id="slide" inputmode="decimal" style="width:44px"> PTS PER -10% S&amp;P</label>
-<span style="color:var(--amb)" id="slideNote">[MEASURED 2024-26 // FINDINGS F12]</span></div>
-<div class="note">The shift moves every column's volatility. "Vol follows the S&amp;P" adds the slide for each 10% the S&amp;P sits below today (and takes it off above). Measured: about +1 point per -10% for 3-year S&amp;P options; one-year volatility (VIX1Y) moves about +4.6.</div>
+<div class="row">VOL FOLLOWS <span class="ix">S&amp;P</span> <button class="k on" id="slideOn" aria-pressed="true">ON</button>
+<label><input type="text" id="slide" inputmode="decimal" style="width:44px"> PTS PER -10% <span class="ix">S&amp;P</span></label>
+<span style="color:var(--amb)" id="slideNote" class="sponly">[MEASURED 2024-26 // FINDINGS F12]</span></div>
+<div class="note">The shift moves every column's volatility. "Vol follows the index" adds the slide for each 10% the index sits below today (and takes it off above). <span class="sponly">S&amp;P 500 measurement: about +1 point per -10% for 3-year options; one-year volatility (VIX1Y) moves about +4.6.</span></div>
 </div>
 
 <div class="box"><h2 id="gridTitle">[ P/L PER SHARE // DATE x S&amp;P ]</h2>
@@ -131,11 +131,11 @@ a{color:var(--amb)}
 <div class="gridwrap"><table id="odds"></table></div>
 <div class="row">CUSTOM MEAN TOTAL RETURN % <input type="text" id="customMu" inputmode="decimal" style="width:52px"> <span id="customNote" style="color:var(--amb)"></span></div>
 <div class="note" id="oddsNote"></div>
-<div class="note">History (S&amp;P 500 incl. dividends, every 3&frac14;-year stretch since 1871, Shiller data; FINDINGS F13): median 10.0%/yr &#9474; top 25% 16.1% &#9474; top 10% 22.5% &#9474; top 5% 26.6% &#9474; best 40.2% (1926-29). Since 1950: median 11.7%, top 10% 21.5%. Overlapping stretches: about 46 separate ones since 1871.</div>
+<div class="note sponly" id="histNote">History (S&amp;P 500 incl. dividends, every 3&frac14;-year stretch since 1871, Shiller data; FINDINGS F13): median 10.0%/yr &#9474; top 25% 16.1% &#9474; top 10% 22.5% &#9474; top 5% 26.6% &#9474; best 40.2% (1926-29). Since 1950: median 11.7%, top 10% 21.5%. Overlapping stretches: about 46 separate ones since 1871.</div>
 </div>
 
 <div class="nfowrap"><pre id="nfo"></pre></div>
 </div>
-<script src="engine.js?v=0.2.0-w3c"></script>
-<script src="app.js?v=0.2.0-w3c"></script>
+<script src="engine.js?v=0.2.0-w3d"></script>
+<script src="app.js?v=0.2.0-w3d"></script>
 </body></html>

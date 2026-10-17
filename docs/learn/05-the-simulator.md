@@ -44,14 +44,14 @@ of stretches 22.5% or more, and the best 40% (FINDINGS F13).
 - **+ SPEC**: any fund made of option legs plus cash, described in a few lines:
 
 ```json
-{"name": "Hypothetical call-spread target fund", "etf": "SPY", "target": "2030-01-10",
+{"name": "Hypothetical call-spread target fund", "index": "S&P 500", "etf": "SPY", "target": "2030-01-10",
  "index_per_etf_target": 10.045, "cash": 0.3, "fee": 0.95,
  "legs": [{"kind": "call", "sign": 1, "strike": 900, "units": 0.5},
           {"kind": "call", "sign": -1, "strike": 1100, "units": 0.5}]}
 ```
 
 `sign` is 1 for bought and -1 for sold options, `units` is one-share options per fund share, strikes are in ETF
-dollars, `fee` is percent per year, and `index_per_etf_target` is the S&P points per ETF dollar on the target date.
+dollars, `fee` is percent per year, `index` names the index the fund tracks, and `index_per_etf_target` is the index points per ETF dollar on the target date. For an index other than the S&P 500, the page relabels itself and greys out its S&P 500 evidence (the volatility slide of F12, the history of F13 and the skew note of F10): set your own slide, and type the fund's own ETF and index prices.
 A call spread's value rises and then falls as volatility grows, so the page solves on the rising side.
 
 ## The model, and how it differs from the daily report
