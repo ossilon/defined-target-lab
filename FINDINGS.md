@@ -290,3 +290,42 @@ What it teaches, for the v0.3 engine:
 Caveats: one simple payoff and one machine; wall-clock times on a desktop that was also running other programs.
 The engines use different random streams (numpy PCG64, numba per-thread streams, cuRAND), so they agree only within
 Monte Carlo error, not path by path.
+
+**F15. Real history's shape lowers XX's model value by 13-24% against the simple model at the same daily
+volatility, and one era's history understated the next era's drawdowns.** Measured 2026-10-17
+(`scripts/bootstrap_study.py`, montecarlo engine v0.3 steps 1-5; S&P 500 price closes 1950-01-03 to 2026-10-09;
+Ken French's daily US market total return 1926-07-01 to 2026-08-31; 1 million paths per row; the study's outputs were
+written into the script before the first run, and one diagnostic column, "value, E = F", was added after it).
+
+Out of sample (build 1950-1999, test 2000-2026, 814-session windows, about 8 separate ones):
+
+| Generator built from 1950-1999 | Test windows below its 10th / above its 90th percentile: return | ... : maximum drawdown |
+|---|---|---|
+| lognormal | 19.3% / 1.5% | 10.9% / 38.8% |
+| bootstrap, mean blocks 21 / 126 / 504 sessions | 18.7-19.6% / 1.3% | 10.8-10.9% / 36.5-37.1% |
+
+Ideal: 10% / 10%. The build period ran at 13.6% annualized volatility and the test period at 19.2%: generators built
+from one era's history, at that era's volatility, put 2000-2026's drawdowns above their 90th percentile in 37-39% of
+windows. A history bootstrap is a shape, not a forecast; its volatility has to be an input. The block length did
+not fix this (it moved the median drawdown percentile from 0.66 to 0.53).
+
+Shape alone (each history reset to the same daily mean and spread as the lognormal: XX's 2026-10-13 example, vol
+16.6%, drift 3.87% a year, strike 1.279 x spot, 814 real sessions):
+
+| Generator | P(finish above strike) | P(touch strike at a close) | S_T/S_0 10th / 50th / 90th | Value per $1 of spot, E[S_T] = F |
+|---|---|---|---|---|
+| lognormal (Black-76's model) | 29.0% | 49.3% | 0.740 / 1.085 / 1.590 | 0.0701 |
+| S&P 500 1950-2026, blocks 21 / 126 / 504 | 28.5% / 28.9% / 27.3% | 46.5% / 45.0% / 42.8% | 0.75 / 1.10-1.11 / 1.51-1.55 | 0.0610 / 0.0575 / 0.0530 |
+| US market 1926-2026, blocks 21 / 126 / 504 | 30.3% / 31.9% / 32.2% | 49.2-49.4% | 0.71-0.72 / 1.09-1.14 / 1.56-1.61 | 0.0743 / 0.0705 / 0.0604 |
+
+Standard errors: 0.05 points on the probabilities, about 0.0002 on the values. The chance of finishing above the
+strike moves little (27-32% against 29%); the value moves more, because a far out-of-the-money call lives in the upper
+tail, and post-1950 S&P history at the same daily volatility has a thinner 3-year upper tail (90th percentile
+1.51-1.55 against 1.59): its daily swings partly undo each other over years. History since 1926, with the 1930s,
+has the opposite tilt at short blocks.
+
+Caveats: the daily spread is matched, not the 3-year one; the option market's 16.6% is a 3-year implied volatility,
+so this is not a mispricing claim, it is a statement about how daily risk adds up over years in each history.
+Few separate 3-year spans exist in any history (about 23 since 1950, 31 since 1926), so the block length (a choice,
+reported at three values) moves the answer as much as the history does. Price returns, demeaned: dividends do not
+change the shape. A regime model and a joint volatility path are later work (v0.3.x).

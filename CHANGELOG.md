@@ -38,6 +38,10 @@
   inputs differ only in shape. Judged on synthetic history with fat tails and strong serial correlation: every row
   equally likely at every step, geometric block starts, the exact mean, and the exact variance of a path's sum
   (errors of 1.09, -0.92 and -0.12 standard errors for mean blocks 1, 5 and 40).
+- **History study** (`scripts/bootstrap_study.py`, step 6; FINDINGS F15) on the S&P 500 since 1950 and the US
+  market since 1926: generators built from 1950-1999 understated 2000-2026's drawdowns (37-39% of windows above their
+  90th percentile; that era ran at 19.2% volatility against 13.6%), and at the same daily volatility, post-1950 S&P
+  history makes XX's option worth 13-24% less than the lognormal model, mostly through a thinner 3-year upper tail.
 
 ## v0.2.3 (2026-10-17)
 
