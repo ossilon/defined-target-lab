@@ -94,6 +94,9 @@
   }
   function relabel() {
     var name = ixName(), sp = isSP();
+    var word = S.fund === "LISTED" ? "SPX" : S.fund === "SPEC" ? "SPEC" : "XX";
+    $("logo").textContent = logo(word);
+    document.title = word + " // TARGET SIM";
     Array.prototype.forEach.call(document.querySelectorAll(".ix"), function (e) { e.textContent = name; });
     Array.prototype.forEach.call(document.querySelectorAll(".sponly"), function (e) { e.classList.toggle("greyed", !sp); });
     $("slideNote").textContent = sp ? "[MEASURED 2024-26 // FINDINGS F12]" : "[S&P 500 ONLY // SET YOUR OWN]";
@@ -280,6 +283,25 @@
       (f.underlying === "index" ? "" : esc($("etfLbl").textContent) + " <b>" + fmt(v.etf, 2) + "</b>" + sep) +
       "S&amp;P <b>" + fmt(v.idx, 2) + "</b>" + sep + "IV <b>" + pct(M.vol, 2) + "</b>" + sep + "RATE <b>" +
       fmt(v.rate, 2) + "%</b>" + sep + "T-MINUS <b>" + v.T.toFixed(2) + "Y</b>" + sep + "AS OF " + esc($("date").value);
+  }
+  // Block letters for the logo ("ANSI Shadow" style). Written in plain ASCII so the file never depends on an encoding:
+  // # = full block, a = top-right corner, b = top-left, c = bottom-right, d = bottom-left, = and | = double lines.
+  var GLYPHS = {
+    X: ["##a  ##a", "d##a##bc", " d###bc ", " ##b##a ", "##bc ##a", "d=c  d=c"],
+    S: ["#######a", "##b====c", "#######a", "d====##|", "#######|", "d======c"],
+    P: ["######a ", "##b==##a", "######bc", "##b===c ", "##|     ", "d=c     "],
+    E: ["#######a", "##b====c", "#####a  ", "##b==c  ", "#######a", "d======c"],
+    C: [" ######a", "##b====c", "##|     ", "##|     ", "d######a", " d=====c"]
+  };
+  var GLYPH_CHARS = {"#": "█", a: "╗", b: "╔", c: "╝", d: "╚", "=": "═", "|": "║"};
+  function logo(word) {
+    var rows = [];
+    for (var r = 0; r < 6; r++) {
+      rows.push(" " + word.split("").map(function (ch) { return GLYPHS[ch][r]; }).join("").replace(/[#abcd=|]/g, function (k) {
+        return GLYPH_CHARS[k];
+      }));
+    }
+    return rows.join("\n");
   }
   function renderTitle(v) {
     var f = F(), title, holds;
