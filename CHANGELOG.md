@@ -16,6 +16,15 @@
   independent runs against exact lognormal answers: the 95% intervals contained the truth 94.0% (price), 94.2%
   (P(S_T > K)) and 95.4-95.8% (percentiles) of the time, inside the 93.2-96.8% band fixed in advance. For a rare
   event with about 2 hits per run, the textbook (Wald) interval covered only 87.7%; Wilson's covered 94.8%.
+- **Lognormal paths** (`montecarlo.paths`, step 3) on any time grid, including the real trading calendar
+  (`times_from_dates`). Each path reports, in one causal pass: the end level, the highest close, the drawdown at the
+  end, the maximum drawdown, the first close at a barrier, the exact chance that the continuous path touched the
+  barrier between closes (Brownian bridge), and levels at checkpoints. Judged by exact formulas, all within 3 SE:
+  the end distribution on 814 unequal calendar steps, the martingale property at 11 checkpoints, Spitzer's identity
+  for the expected highest close and (by time reversal) the drawdown at the end, and the reflection principle for a
+  continuous touch (+28% before expiry: exact 0.54079). Two approximations sit within allowances fixed in advance:
+  Broadie-Glasserman-Kou for touches checked at closes, and Magdon-Ismail's zero-drift expected maximum drawdown
+  (extrapolated 0.25090 against 0.25066).
 
 ## v0.2.3 (2026-10-17)
 
