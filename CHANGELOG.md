@@ -32,6 +32,12 @@
   runs until a target standard error is met or a path limit is reached, and reports which. On the test machine's CPU:
   the option value to SE 0.004 took 1.03 billion paths in 30 s (54.67715 against Black-76 54.67744), and the exact
   median of 1 billion end prices took 51 s while keeping 235,112 values (843.66519 against the exact 843.66528).
+- **History bootstrap** (`montecarlo.bootstrap`, step 5): the circular stationary bootstrap (Politis and Romano,
+  1994) builds paths from blocks of real history with random lengths of a chosen mean; several columns travel
+  together; `equal_moments` gives history any chosen mean and spread, so a bootstrap and a lognormal with the same
+  inputs differ only in shape. Judged on synthetic history with fat tails and strong serial correlation: every row
+  equally likely at every step, geometric block starts, the exact mean, and the exact variance of a path's sum
+  (errors of 1.09, -0.92 and -0.12 standard errors for mean blocks 1, 5 and 40).
 
 ## v0.2.3 (2026-10-17)
 
