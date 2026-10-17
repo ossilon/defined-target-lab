@@ -61,7 +61,13 @@
   function F() { return FUNDS[S.fund]; }
   // The index the fund tracks. The S&P 500 evidence on the page (F10 skew, F12 slide, F13 history) fits only S&P funds.
   function isSP() { return S.fund !== "SPEC" || /s\s*&\s*p|500/i.test(S.spec.index || "S&P 500"); }
-  function ixName() { return isSP() ? "S&P" : String(S.spec.index); }
+  var INDEX_SYMBOLS = [[/nasdaq[\s-]*100|^ndx$/i, "NDX"], [/dow|djia|^dji$/i, "DJIA"], [/russell[\s-]*2000|^rut$/i, "RUT"]];
+  function ixName() {                                  // short labels: the index's usual symbol where we know it
+    if (isSP()) return "S&P";
+    var name = String(S.spec.index).trim();
+    for (var i = 0; i < INDEX_SYMBOLS.length; i++) if (INDEX_SYMBOLS[i][0].test(name)) return INDEX_SYMBOLS[i][1];
+    return name;
+  }
   function replaceText(node, a, b) {                   // swap a word in the text of an already-built element
     if (!node || a === b) return;
     var w = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null, false), n;
