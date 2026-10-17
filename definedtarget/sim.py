@@ -208,22 +208,109 @@ def p_worthless(fund, mean_st, vol, T):
     return max(below_call - below_put, 0.0)
 
 
+def _breakpoints(fund):
+    return sorted({leg.strike for leg in fund.legs})
+
+
+def rises_with_index(fund, m):
+    """True when a share's value at the target date never falls as the ETF rises (bought calls, call spreads).
+
+    The value is a straight line between strikes, so checking it at 0, at each strike and beyond the last suffices.
+    """
+    ks = _breakpoints(fund)
+    vals = [value_at_target(fund, s, m) for s in [0.0] + ks + [2.0 * ks[-1]]]
+    return all(b >= a - 1e-12 * max(1.0, abs(a)) for a, b in zip(vals, vals[1:]))
+
+
+def zones_above(fund, y, m):
+    """ETF ranges (a, b) at the target date where a share is worth more than y, in order; b may be infinite.
+
+    Exact: between strikes (and beyond the last one) the value is a straight line, so each crossing is solved directly.
+    """
+    ks = _breakpoints(fund)
+    pts = [0.0] + ks
+    out = []
+
+    def add(a, b):
+        if out and abs(out[-1][1] - a) <= 1e-12 * max(1.0, a):
+            out[-1] = (out[-1][0], b)
+        else:
+            out.append((a, b))
+
+    for a, b in zip(pts, pts[1:]):
+        fa, fb = value_at_target(fund, a, m), value_at_target(fund, b, m)
+        if fa > y and fb > y:
+            add(a, b)
+        elif fa > y:
+            add(a, a + (y - fa) / (fb - fa) * (b - a))
+        elif fb > y:
+            add(a + (y - fa) / (fb - fa) * (b - a), b)
+    a = pts[-1]
+    fa = value_at_target(fund, a, m)
+    slope = value_at_target(fund, a + 1.0, m) - fa          # value per ETF dollar beyond the last strike
+    if fa > y:
+        add(a, math.inf if slope >= 0 else a + (y - fa) / slope)
+    elif slope > 0:
+        add(a + (y - fa) / slope, math.inf)
+    return out
+
+
+def p_value_above(fund, y, mean_st, vol, T, m):
+    """Chance a share is worth more than y at the target date (S_T lognormal with mean mean_st)."""
+    return sum(prob_above(a, mean_st, vol, T) - (prob_above(b, mean_st, vol, T) if b < math.inf else 0.0)
+               for a, b in zones_above(fund, y, m))
+
+
+def value_quantile(fund, p, mean_st, vol, T, m):
+    """The p-quantile of a share's value at the target date, for any payoff shape (bisection on the exact chance)."""
+    ks = _breakpoints(fund)
+    vals = [value_at_target(fund, s, m) for s in [0.0] + ks + [2.0 * ks[-1]]]
+    lo = min(vals) - 1e-9 * max(1.0, abs(min(vals)))
+    tail_up = value_at_target(fund, ks[-1] + 1.0, m) > value_at_target(fund, ks[-1], m)
+    hi = value_at_target(fund, quantile(mean_st, vol, T, 1.0 - 1e-9), m) if tail_up else max(vals)
+    hi = max(hi, max(vals))
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if p_value_above(fund, mid, mean_st, vol, T, m) <= 1.0 - p:
+            hi = mid
+        else:
+            lo = mid
+        if hi - lo < 1e-12 * max(1.0, abs(hi)):
+            break
+    return hi
+
+
 def outcome_row(fund, price, S0, vol, m, mu=None):
-    """Odds and outcomes at the target date for a share bought at `price` (same fields as analytics.outcome_table)."""
+    """Odds and outcomes at the target date for a share bought at `price` (same fields as analytics.outcome_table).
+
+    For a fund whose value only rises with the ETF (XX, call spreads) the break-even is one level and every outcome
+    percentile is the payoff at that percentile of S_T. For any other shape (puts, sold calls) the chances and
+    percentiles come from the exact ranges where the value beats a level (audit B10b). profit_zones lists the ETF
+    ranges at the target date where a share is worth more than the price paid.
+    """
     mean_st = forward_at_target(S0, m, mu)
     T = m.horizon
-    be1, be2 = level_for_value(fund, price, m), level_for_value(fund, 2.0 * price, m)
-    mult = {p: value_at_target(fund, quantile(mean_st, vol, T, p), m) / price for p in (0.10, 0.50, 0.90)}
+    rises = rises_with_index(fund, m)
+    if rises:
+        be1, be2 = level_for_value(fund, price, m), level_for_value(fund, 2.0 * price, m)
+        mult = {p: value_at_target(fund, quantile(mean_st, vol, T, p), m) / price for p in (0.10, 0.50, 0.90)}
+        p_profit = prob_above(be1, mean_st, vol, T) if be1 == be1 else 0.0
+        p_double = prob_above(be2, mean_st, vol, T) if be2 == be2 else 0.0
+    else:
+        be1 = be2 = float("nan")
+        mult = {p: value_quantile(fund, p, mean_st, vol, T, m) / price for p in (0.10, 0.50, 0.90)}
+        p_profit = p_value_above(fund, price, mean_st, vol, T, m)
+        p_double = p_value_above(fund, 2.0 * price, mean_st, vol, T, m)
     mean_growth = math.exp(m.rate) if mu is None else 1.0 + mu
     return {
         "mu": mu,
         "p_worthless": p_worthless(fund, mean_st, vol, T),
-        "p_profit": prob_above(be1, mean_st, vol, T) if be1 == be1 else 0.0,
-        "p_double": prob_above(be2, mean_st, vol, T) if be2 == be2 else 0.0,
+        "p_profit": p_profit, "p_double": p_double,
         "multiple_p10": mult[0.10], "multiple_median": mult[0.50], "multiple_p90": mult[0.90],
         "median_price_cagr": (quantile(mean_st, vol, T, 0.5) / S0) ** (1.0 / T) - 1.0,
         "median_tr_cagr": mean_growth * math.exp(-0.5 * vol * vol) - 1.0,
-        "breakeven": be1, "double_level": be2,
+        "breakeven": be1, "double_level": be2, "rises": rises,
+        "profit_zones": [list(z) for z in zones_above(fund, price, m)],
     }
 
 

@@ -229,6 +229,14 @@ the measured +1.0 point, and only 10.0% if XX's vol jumped like VIX1Y (+4.6). Th
 assumed (Treasury zero curve; SPY's trailing 12-month yield), and F11 saw the vendor's marks move the other way
 over ten closes. Data stay local (TradingView quotes and Cboe's VIX1Y file); only these statistics are published.
 Code: `scripts/measure_vol_slide.py` (the VIX1Y rows, from your own closes and Cboe's free file).
+More caveats (audit B10b): each implied vol comes from a trade made before the close it is paired with, so the
+S&P returns carry noise and the regression slope is pulled toward zero: +1.1 is more likely too low than too high.
+The April 2025 episode alone ran about +1.6 to +1.7 points per 10% fall. A fixed strike also slides further out of the money
+as the S&P falls, and the skew (F10) lowers its vol by about 1.7 points per 10%, which helps explain why this slide
+is so much smaller than at-the-money measures. The simulator applies the slide symmetrically, so the rally side is
+an extrapolation (F11 saw the vendor's marks move the other way over ten closes). The monthly estimate cannot tell
++1 from zero either way.
+
 
 **F13. Over stretches as long as XX's life, the S&P has cleared XX's break-even about a third to a half of the
 time.** Measured 2026-10-17 for the simulator's odds rows (`scripts/history_windows.py`, Shiller's monthly data).

@@ -103,5 +103,52 @@ mean = sim.forward_at_target(S0, M)
 check("strangle: worthless only between the put and call strikes",
       abs(sim.p_worthless(pp, mean, VOL, T) - ((1 - sim.prob_above(900.0, mean, VOL, T))
                                                 - (1 - sim.prob_above(700.0, mean, VOL, T)))) < 1e-15)
+# Odds for payoffs that do not only rise with the index (audit B10b): a bought put, a sold call, a strangle.
+# Exact answers from the straight-line ranges, checked against a million simulated target-date prices.
+import numpy as np  # noqa: E402
+
+rng = np.random.default_rng(11)
+sd = VOL * math.sqrt(T)
+mean_rn = sim.forward_at_target(S0, M)
+s_t = mean_rn * np.exp(-0.5 * sd * sd + sd * rng.standard_normal(1_000_000))
+
+
+def simulated(fund):
+    keep = math.exp(-fund.fee * T)
+    pay = sum(L.sign * L.units * (np.maximum(s_t - L.strike, 0) if L.kind == "call" else np.maximum(L.strike - s_t, 0))
+              for L in fund.legs)
+    return keep * pay + fund.cash
+
+
+cases = {"bought put 700": sim.Fund((sim.Leg("put", 1, 700.0, 1.0),), cash=0.5),
+         "sold call 900 + cash": sim.Fund((sim.Leg("call", -1, 900.0, 1.0),), cash=120.0),
+         "strangle 700/900": sim.Fund((sim.Leg("put", 1, 700.0, 1.0), sim.Leg("call", 1, 900.0, 1.0)))}
+for name, fund in cases.items():
+    price = sim.share_value(fund, S0, 0.0, VOL, M)
+    row = sim.outcome_row(fund, price, S0, VOL, M)
+    v = simulated(fund)
+    n = len(v)
+    se = lambda p: 3 * math.sqrt(max(p * (1 - p), 1e-12) / n)  # noqa: E731
+    p_prof, p_dbl = float(np.mean(v > price)), float(np.mean(v > 2 * price))
+    check(f"{name}: not a rising payoff, so the exact-range path is used", row["rises"] is False)
+    check(f"{name}: chance of profit and of doubling match the simulation (3 standard errors)",
+          abs(row["p_profit"] - p_prof) < se(p_prof) and abs(row["p_double"] - p_dbl) < se(p_dbl),
+          (row["p_profit"], p_prof, row["p_double"], p_dbl))
+    qs = np.quantile(v, [0.10, 0.50, 0.90]) / price
+    check(f"{name}: 10th / median / 90th percentile multiples match the simulation (0.5% or 0.002)",
+          all(abs(a - b) < max(0.005 * abs(b), 0.002) for a, b in
+              zip((row["multiple_p10"], row["multiple_median"], row["multiple_p90"]), qs)),
+          ((row["multiple_p10"], row["multiple_median"], row["multiple_p90"]), tuple(qs)))
+    check(f"{name}: percentiles are in order (p10 <= median <= p90)",
+          row["multiple_p10"] <= row["multiple_median"] <= row["multiple_p90"])
+put_zones = sim.outcome_row(cases["bought put 700"], 25.0, S0, VOL, M)["profit_zones"]
+check("a bought put profits only below a level: one zone starting at 0",
+      len(put_zones) == 1 and put_zones[0][0] == 0.0 and put_zones[0][1] < 700.0, put_zones)
+xx_row = sim.outcome_row(XX, nav, S0, iv, M)
+check("XX keeps the rising-payoff path, and its profit zone starts at the break-even",
+      xx_row["rises"] is True and abs(xx_row["profit_zones"][0][0] - xx_row["breakeven"]) < 1e-6
+      and xx_row["profit_zones"][0][1] == math.inf, xx_row["profit_zones"])
+sp_row = sim.outcome_row(spread, v_sp, S0, VOL, M)
+check("a call spread still counts as rising (it flattens above the upper strike, never falls)", sp_row["rises"] is True)
 check("index ratio runs in a straight line from today to the target date",
       sim.ratio_at(0.0, 10.03, 10.045, 3.0) == 10.03 and abs(sim.ratio_at(1.5, 10.03, 10.045, 3.0) - 10.0375) < 1e-12)

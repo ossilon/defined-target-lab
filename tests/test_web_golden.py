@@ -44,5 +44,15 @@ sent = sum(len(gzip.compress(b, 9)) for b in page_files)
 check("the simulator page sends under 25 KB compressed (index.html + app.js + engine.js)", sent < 25_000, sent)
 check("... and stays under 75 KB stored", sum(len(b) for b in page_files) < 75_000, sum(len(b) for b in page_files))
 app = (REPO / "web" / "app.js").read_text(encoding="utf-8")
-check("the page sends nothing anywhere: no fetch, XMLHttpRequest, beacons or storage in app.js",
-      not re.search(r"\bfetch\(|XMLHttpRequest|sendBeacon|localStorage|sessionStorage|document\.cookie|WebSocket", app))
+check("the page sends nothing anywhere: no fetch, XMLHttpRequest, beacons, storage, image or script loads, "
+      "navigation, forms or dynamic imports in app.js",
+      not re.search(r"\bfetch\(|XMLHttpRequest|sendBeacon|localStorage|sessionStorage|indexedDB|document\.cookie|"
+                    r"WebSocket|EventSource|new Image|\.src\s*=|location\.(href|assign|replace)\s*[=(]|window\.open|"
+                    r"<form|\bimport\(|createElement\(\s*['\"](script|img|iframe|link)", app))
+used = set(re.findall(r"\bE\.(\w+)\(", app))
+check("every engine function app.js calls has its own cases in the golden file",
+      used <= {c["fn"] for c in doc["cases"]}, used - {c["fn"] for c in doc["cases"]})
+for name in ("app.js", "engine.js", "index.html", "selftest.html"):
+    raw = (REPO / "web" / name).read_bytes()
+    check(f"{name} is pure ASCII (box and block characters written as escapes, so no encoding can garble them)",
+          all(b < 128 for b in raw), sorted({b for b in raw if b >= 128})[:5])

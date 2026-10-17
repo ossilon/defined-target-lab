@@ -5,8 +5,9 @@
 ### Added
 - **Simulator model** (`definedtarget/sim.py`): value, leverage, one day's cost and odds for any fund made of option
   legs plus cash (calls or puts, bought or sold), with volatility that can follow the index. Pinned to
-  `analytics.py` and `valuation.py` for XX to 1e-9.
-- **Browser engine** (`web/engine.js`, no libraries) and **self-test** (`web/selftest.html`): 716 answers written by
+  `analytics.py` (odds, break-evens, values) and `pricing.implied_vol` for XX to 1e-9, and checked against a million
+  simulated outcomes for puts, sold calls and strangles.
+- **Browser engine** (`web/engine.js`, no libraries) and **self-test** (`web/selftest.html`): 780 answers written by
   the Python engine (`scripts/make_golden.py` -> `web/golden.js`, 88 KB) must all match in the browser; it opens
   from a double-clicked file too, and a test fails if the answers go stale.
 - **The simulator page** (`web/index.html`, `web/app.js`): a date x S&P heatmap of one share's P/L, value or
@@ -23,6 +24,9 @@
   the page relabels itself and greys out the S&P-only evidence (F10, F12, F13). An impossible price gets an
   explanation and a one-click fair price; SOLVE VOL and EXAMPLE confirm what they did.
 - **docs/learn/05**: how to read the simulator.
+- **Audit B10b** (independent model, full review of v0.2): its fixes are in this release: exact odds for funds with
+  puts or sold calls, a link with a stray % no longer stops the page, index names containing "S&P" label correctly,
+  hardened text escaping, comma checks on numbers, a pure-ASCII page, and broader self-test coverage.
 - **Volatility slide measured** (FINDINGS F12, `scripts/measure_vol_slide.py`): the 3-year vol at XX's strike rises
   about 1 point per 10% S&P fall, a fifth of VIX1Y's 4.6.
 

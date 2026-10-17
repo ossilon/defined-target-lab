@@ -32,13 +32,13 @@
       name: "Hypothetical NDX 50,000 target fund", index: "Nasdaq-100", etf: "QQQ", target: "2030-01-10",
       index_per_etf_target: 41.167, cash: 0.25, fee: 0.99,
       legs: [{kind: "call", sign: 1, strike: 1214.57, units: 0.76}],
-      example_market: {etf: 750, index: 30825, div_yield: 0.55, vol: 21,
+      example_market: {etf: 750, index: 30800, div_yield: 0.55, vol: 21,
                        note: "illustrative round numbers near October 2026 levels (NDX is about 41.1 x QQQ), not quotes"}},
     "DIA DJIA 75,000": {
       name: "Hypothetical DJIA 75,000 target fund", index: "Dow Jones Industrial Average", etf: "DIA",
       target: "2030-01-10", index_per_etf_target: 100.397, cash: 0.25, fee: 0.99,
       legs: [{kind: "call", sign: 1, strike: 747.03, units: 1.79}],
-      example_market: {etf: 520, index: 52093, div_yield: 1.6, vol: 15,
+      example_market: {etf: 520, index: 52100, div_yield: 1.6, vol: 15,
                        note: "illustrative round numbers near October 2026 levels (DJIA is about 100.2 x DIA), not " +
                              "quotes. The design follows a filed Dow 75,000 Target 2030 fund that has not launched; its " +
                              "strike, options per share and cash here are assumed"}}
@@ -56,7 +56,9 @@
 
   // ---------- small helpers ----------
   function num(id) {
-    var el = $(id), x = parseFloat(String(el.value).replace(/[,$%\s]/g, ""));
+    // Commas only as thousands separators (7,805.45). "26,51" is flagged, not read as 2651 (audit B10b).
+    var el = $(id), s = String(el.value).replace(/[$%\s]/g, "");
+    var x = /,/.test(s) && !/^-?\d{1,3}(,\d{3})+(\.\d*)?$/.test(s) ? NaN : parseFloat(s.replace(/,/g, ""));
     el.classList.toggle("bad", !isFinite(x) && !el.disabled);
     return isFinite(x) ? x : NaN;
   }
@@ -75,7 +77,10 @@
   function addMonths(ms, n) { var d = new Date(ms); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate()); }
   var MON = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
   function colLabel(ms) { var d = new Date(ms); return MON[d.getUTCMonth()] + "<br>" + String(d.getUTCFullYear()).slice(2); }
-  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+  function esc(s) {                                    // safe in text and in quoted attributes
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
   function F() { return FUNDS[S.fund]; }
   // The index the fund tracks. The S&P 500 evidence on the page (F10 skew, F12 slide, F13 history) fits only S&P funds.
   var INDEX_SYMBOLS = [[/s\s*&\s*p\s*500|^s\s*&\s*p$|^spx$/i, "S&P"], [/nasdaq[\s-]*100|^ndx$/i, "NDX"],
@@ -100,7 +105,13 @@
     Array.prototype.forEach.call(document.querySelectorAll(".ix"), function (e) { e.textContent = name; });
     Array.prototype.forEach.call(document.querySelectorAll(".sponly"), function (e) { e.classList.toggle("greyed", !sp); });
     $("slideNote").textContent = sp ? "[MEASURED 2024-26 // FINDINGS F12]" : "[S&P 500 ONLY // SET YOUR OWN]";
-    if (!sp) ["tape", "sum", "grid", "graph", "gridTitle", "gridNote", "readout", "odds", "oddsNote"].forEach(function (id) {
+  }
+  // Swap the index name into text this render just built. Runs exactly once per build (audit B10b: running it on
+  // text built earlier turned "S&P 100" into "S&P 100 100 ..."), so names that contain "S&P" are safe.
+  function relabelBuilt() {
+    if (isSP()) return;
+    var name = ixName();
+    ["tape", "sum", "grid", "graph", "gridTitle", "gridNote", "odds", "oddsNote"].forEach(function (id) {
       replaceText($(id), "S&P", name);
     });
   }
@@ -183,13 +194,17 @@
                vol: "vol", units: "units", strike: "strike", cash: "cash", fee: "fee", finish: "finish", target: "target",
                ratio: "ratio"};
     var got = {};
+    function decode(s) {                                // a hand-typed "%" must not stop the page (audit B10b)
+      try { return decodeURIComponent(s); } catch (e) { return s; }
+    }
     h.split("&").forEach(function (kv) {
-      var p = kv.split("="), id = map[decodeURIComponent(p[0] || "").toLowerCase()];
-      if (id && p[1] !== undefined) { $(id).value = decodeURIComponent(p[1]); got[id] = true; }
+      var p = kv.split("="), id = map[decode(p[0] || "").toLowerCase()];
+      if (id && p[1] !== undefined) { $(id).value = decode(p[1]); got[id] = true; }
     });
     if (got.vol) S.volTyped = true;
     if (got.etf && got.idx && !got.ratio) $("ratio").value = round(num("idx") / num("etf"), 4);
     else if (got.etf && !got.idx) $("idx").value = round(num("etf") * num("ratio"), 2);
+    else if (got.idx && !got.etf) $("etf").value = round(num("idx") / num("ratio"), 2);
     return Object.keys(got).length > 0;
   }
   function readInputs() {
@@ -234,6 +249,10 @@
     return {fund: fund, m: m, vol: vol, ratioNow: v.idx / v.etf, ratioT: v.ratioT};
   }
 
+  function stale(on) {                                  // dim results left over from the last good inputs
+    ["sum", "grid", "graph", "odds"].forEach(function (id) { $(id).classList.toggle("greyed", on); });
+    if (on && /loading/.test($("tape").textContent)) $("tape").innerHTML = "&gt; CHECK THE INPUTS BELOW";
+  }
   function preLaunchNote(v) {                          // before the fund existed: say what the numbers mean
     if (S.fund !== "XX" || !(v.d0 < utc(XX_LAUNCH))) return "";
     return ' <span style="color:var(--amb)">Before XX existed (launched ' + XX_LAUNCH + "): this is a hypothetical fund " +
@@ -248,9 +267,15 @@
     $("volNote").innerHTML = S.volTyped ? "&lt;- TYPED (SOLVE VOL to undo)" : "&lt;- SOLVED FROM PRICE";
     $("solve").disabled = !S.volTyped;
     $("solve").title = S.volTyped ? "Solve the implied vol from the price paid again" : "The vol is already solved from the price paid";
-    if (v.bad.length) { note.innerHTML = '<span class="err">check: ' + esc(v.bad.join(", ")) + "</span>"; return; }
+    if (v.bad.length) { note.innerHTML = '<span class="err">check: ' + esc(v.bad.join(", ")) + "</span>"; stale(true); return; }
     var M = model(v);
+    if (S.volTyped && !(M.vol > 0)) {
+      note.innerHTML = '<span class="err">Type an implied vol above 0 (e.g. 16.6), or press SOLVE VOL.</span>';
+      stale(true);
+      return;
+    }
     if (!isFinite(M.vol) || M.vol <= 0) {
+      stale(true);
       // The inputs describe one moment: this price cannot go with this market. Say why, and offer the fair price.
       var per = F().per, lo = Infinity, hi = -Infinity, ref = S.lastVol || 0.166;
       for (var n = 0; n <= 60; n++) {
@@ -265,6 +290,7 @@
       return;
     }
     if (!S.volTyped) S.lastVol = M.vol;
+    stale(false);
     note.innerHTML = S.fromLink ? "Inputs came from the link (after the #)." : (fundNote() ? fundNote() + " " : "") +
       (specMarket() ? "" : isSP() ? "Market inputs: dated example (close of " + MARKET.date + "); type today's numbers to update every figure." :
        '<span style="color:var(--amb)">The example market inputs are SPY and the S&amp;P 500: type your fund\'s ETF price, its ' +
@@ -274,7 +300,7 @@
     renderTape(v, M); renderTitle(v); renderSummary(v, M);
     if (S.mode === "graph") renderGraph(v, M); else renderGrid(v, M);
     $("grid").hidden = S.mode === "graph"; $("graph").hidden = S.mode !== "graph";
-    renderOdds(v, M); renderNfo(); relabel();
+    renderOdds(v, M); renderNfo(); relabelBuilt();
   }
 
   function renderTape(v, M) {
@@ -293,7 +319,7 @@
     E: ["#######a", "##b====c", "#####a  ", "##b==c  ", "#######a", "d======c"],
     C: [" ######a", "##b====c", "##|     ", "##|     ", "d######a", " d=====c"]
   };
-  var GLYPH_CHARS = {"#": "█", a: "╗", b: "╔", c: "╝", d: "╚", "=": "═", "|": "║"};
+  var GLYPH_CHARS = {"#": "\u2588", a: "\u2557", b: "\u2554", c: "\u255d", d: "\u255a", "=": "\u2550", "|": "\u2551"};
   function logo(word) {
     var rows = [];
     for (var r = 0; r < 6; r++) {
@@ -325,16 +351,28 @@
   function renderSummary(v, M) {
     var f = F(), T = v.T, etf = f.underlying === "index" ? "S&amp;P" : esc($("etfLbl").textContent);
     var loss = worstValue(M.fund, M.m) - v.paid;
-    var be = E.levelForValue(M.fund, v.paid, M.m) * M.ratioT;
     var row = E.outcomeRow(M.fund, v.paid, v.etf, M.vol, M.m, mu());
     var day = E.oneDay(M.fund, v.etf, M.vol, M.m);
     var lev = E.leverage(M.fund, v.etf, 0, M.vol, M.m);
     var a = mu() === null ? "RISK-NEUTRAL" : "AT " + pct(mu(), 0) + " MEAN";
+    var finishGrowth = pct(E.requiredGrowth(v.idx, v.finish, T));
+    var beText, growthText;
+    if (row.rises) {                                    // one break-even level, and the growth it needs
+      var be = isFinite(row.breakeven) ? row.breakeven * M.ratioT : NaN;
+      beText = isFinite(be) ? "S&amp;P " + fmt(be, 0) : "out of reach";
+      growthText = pct(E.requiredGrowth(v.idx, be, T)) + " (FINISH LINE " + finishGrowth + ")";
+    } else {                                            // puts or sold calls: say where it profits instead
+      beText = row.profit_zones.length ? "PROFIT IF S&amp;P " + row.profit_zones.map(function (z) {
+        var lo = z[0] * M.ratioT, hi = z[1] * M.ratioT;
+        return z[0] <= 0 ? "BELOW " + fmt(hi, 0) : !isFinite(hi) ? "ABOVE " + fmt(lo, 0) : fmt(lo, 0) + "-" + fmt(hi, 0);
+      }).join(" OR ") : "no level profits";
+      growthText = "-- (payoff does not just rise with the index)";
+    }
     var items = [
       ["", "PRICE PAID", "$" + fmt(v.paid, 2)],
       ["bad", "MAX LOSS", money(loss) + " (" + pct(loss / v.paid, 0) + ")"],
-      ["", "BREAK-EVEN AT TARGET", isFinite(be) ? "S&amp;P " + fmt(be, 0) : "out of reach"],
-      ["warn", "GROWTH NEEDED / YR", pct(E.requiredGrowth(v.idx, be, T)) + " (FINISH LINE " + pct(E.requiredGrowth(v.idx, v.finish, T)) + ")"],
+      ["", "BREAK-EVEN AT TARGET", beText],
+      ["warn", "GROWTH NEEDED / YR", growthText],
       ["bad", "OPTIONS WORTHLESS", pct(row.p_worthless, 0) + " " + a],
       ["", "ANY PROFIT", pct(row.p_profit, 0) + " " + a],
       ["", "LEVERAGE NOW", isFinite(lev) ? lev.toFixed(1) + "x" : "--"],
@@ -364,6 +402,7 @@
 
   function renderGrid(v, M) {
     var cols = columns(v), R = S.range, step = R / 4, rows = [], f = F();
+    $("readout").innerHTML = "&gt; hover or tap a cell";   // the old readout described the previous grid
     for (var k = 6; k >= -4; k--) rows.push(k * step / 100);
     var meanST = E.forwardAtTarget(v.etf, M.m, mu());
     var etfName = f.underlying === "index" ? "" : esc($("etfLbl").textContent);
@@ -467,7 +506,7 @@
       "%)" + (f.underlying === "index" ? "" : " &#9474; " + esc($("etfLbl").textContent) + " " + fmt(d.S, 2)) + " &#9474; VOL " + pct(d.vol, 2) +
       " &#9474; VALUE $" + fmt(d.val, 2) + " &#9474; P/L " + money(d.pl) + " (" + signed(d.pl / paid * 100, 1) + "%) &#9474; LEVERAGE " +
       (isFinite(d.lev) ? d.lev.toFixed(1) + "x" : "--");
-    replaceText($("readout"), "S&P", ixName());
+    if (!isSP()) replaceText($("readout"), "S&P", ixName());   // fresh text, swapped once
     var prev = document.querySelector("#grid td.sel");
     if (prev) prev.classList.remove("sel");
     var td = document.querySelector('#grid td[data-i="' + i + '"][data-j="' + j + '"]');
@@ -490,8 +529,11 @@
     $("oddsNote").innerHTML = "Lognormal model at today's implied vol (" + pct(M.vol, 2) + "). 'Mean total return' is an average incl. dividends; " +
       "the median path grows more slowly, so compare its price growth with the " + pct(E.requiredGrowth(v.idx, v.finish, v.T)) +
       "/yr the S&amp;P needs just to reach the finish line. Multiples = value at the target date / price paid. Click a row to use it in the grid.";
-    $("customNote").textContent = S.customMu > 0.40 ? "above the best 3¼-year stretch since 1871 (40.2%/yr incl. dividends)" :
-      S.customMu > 0.27 ? "beyond history's top 5% (26.6%/yr)" : "";
+    // Compare like with like (audit B10b): history's figures are realized growth, so test this row's median path,
+    // not its mean. Median total-return growth = (1 + mean) x exp(-vol^2 / 2) - 1.
+    var med = (1 + S.customMu) * Math.exp(-0.5 * M.vol * M.vol) - 1;
+    $("customNote").textContent = med > 0.402 ? "its median path (" + pct(med) + "/yr) beats the best 3\u00bc-year stretch since 1871 (40.2%)" :
+      med > 0.266 ? "its median path (" + pct(med) + "/yr) is beyond history's top 5% of 3\u00bc-year stretches (26.6%)" : "";
   }
 
   function renderNfo() {
@@ -500,10 +542,10 @@
                  "selftest . selftest.html checks this engine vs Python",
                  "data ..... none: you type every input; nothing is sent",
                  "research tool // not investment advice // not affiliated"];
-    var w = Math.max.apply(null, lines.map(function (s) { return s.length; })) + 2, title = "══[ NFO ]";
-    var out = ["╔" + title + new Array(w - title.length + 1).join("═") + "╗"];
-    lines.forEach(function (s) { out.push("║ " + s + new Array(w - 2 - s.length + 1).join(" ") + " ║"); });
-    out.push("╚" + new Array(w + 1).join("═") + "╝");
+    var w = Math.max.apply(null, lines.map(function (s) { return s.length; })) + 2, title = "\u2550\u2550[ NFO ]";
+    var out = ["\u2554" + title + new Array(w - title.length + 1).join("\u2550") + "\u2557"];
+    lines.forEach(function (s) { out.push("\u2551 " + s + new Array(w - 2 - s.length + 1).join(" ") + " \u2551"); });
+    out.push("\u255a" + new Array(w + 1).join("\u2550") + "\u255d");
     $("nfo").textContent = out.join("\n");
   }
 

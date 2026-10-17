@@ -41,7 +41,11 @@ of stretches 22.5% or more, and the best 40% (FINDINGS F13).
 
 - **SPX 10000C DEC-29**: one listed S&P 500 call contract (strike 10,000, expiring 2029-12-21), per contract, with
   no fee and no cash. Type the ask your broker shows, times 100. It answers "XX or the option itself?"
-- **+ SPEC**: any fund made of option legs plus cash, described in a few lines. Three examples load with one click: a`n  hypothetical SPY call spread; a hypothetical QQQ fund that pays above NDX 50,000 on 2030-01-10 (about 16% a year`n  of NDX growth, twice XX's pace); and a hypothetical DIA fund that pays above DJIA 75,000 (about 12% a year). The`n  Dow example follows the design of a filed, not yet launched Dow 75,000 Target 2030 fund; its strike, options per`n  share and cash are assumed. Example:
+- **+ SPEC**: any fund made of option legs plus cash, described in a few lines. Three examples load with one click: a
+  hypothetical SPY call spread; a hypothetical QQQ fund that pays above NDX 50,000 on 2030-01-10 (about 16% a year
+  of NDX growth, twice XX's pace); and a hypothetical DIA fund that pays above DJIA 75,000 (about 12% a year). The
+  Dow example follows the design of a filed, not yet launched Dow 75,000 Target 2030 fund; its strike, options per
+  share and cash are assumed. Example:
 
 ```json
 {"name": "Hypothetical call-spread target fund", "index": "S&P 500", "etf": "SPY", "target": "2030-01-10",
@@ -52,19 +56,22 @@ of stretches 22.5% or more, and the best 40% (FINDINGS F13).
 
 `sign` is 1 for bought and -1 for sold options, `units` is one-share options per fund share, strikes are in ETF
 dollars, `fee` is percent per year, `index` names the index the fund tracks, and `index_per_etf_target` is the index points per ETF dollar on the target date. Labels use the index's usual symbol where the page knows it (NDX for the Nasdaq-100, DJIA, RUT). The page knows which index the common ETFs track (SPY, VOO, IVV: S&P 500; QQQ, QQQM: Nasdaq-100; DIA: Dow; IWM: Russell 2000): it fills in a missing `index` and refuses one that contradicts the ETF. An optional `example_market` (`etf` price, `index` level, `div_yield` %, `vol` %) loads the spec with its own example prices. For an index other than the S&P 500, the page relabels itself and greys out its S&P 500 evidence (the volatility slide of F12, the history of F13 and the skew note of F10): set your own slide, and type the fund's own ETF and index prices.
-A call spread's value rises and then falls as volatility grows, so the page solves on the rising side.
+A call spread's value rises and then falls as volatility grows, so the page solves on the rising side. A fund
+with puts or sold calls has no single break-even: the page then shows the index ranges where it profits, and its
+odds and percentiles come from those exact ranges.
 
 ## The model, and how it differs from the daily report
 
 The page uses Black-76 with a continuous dividend yield, the same model as `py -m definedtarget calc`. The daily
 report spreads SPY's dividends over their actual quarterly dates. The two agree on the option's price but split it
-slightly differently: on 2026-10-13 the page shows 5.5x leverage and -0.11% per day (the report: 5.6x and -0.13%;
-FINDINGS F8 explains the gap). The fund pays its fee by selling options (the conservative case), and one volatility
+slightly differently: on 2026-10-13 the page shows 5.5x leverage and -0.11% per day (the report: 5.6x and -0.13%).
+The leverage gap comes from the dividends: with a continuous yield, SPY's delta carries a factor exp(-qT) of about
+0.97, while fixed dollar dividends do not shrink with SPY. FINDINGS F8 explains the time-decay gap. The fund pays its fee by selling options (the conservative case), and one volatility
 prices every strike: listed options price the chance of finishing above the strike about 10 points higher (F10).
 
 ## How we know the numbers are right
 
-`web/selftest.html` runs the page's maths on 720 cases and compares each answer with the Python engine's
+`web/selftest.html` runs the page's maths on 780 cases and compares each answer with the Python engine's
 (`scripts/make_golden.py`). Every case must agree to about nine digits. A test fails if the answers go stale.
 
 This page provides general information only. It gives no investment advice.

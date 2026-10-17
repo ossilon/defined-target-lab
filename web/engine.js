@@ -206,20 +206,79 @@
     var belowPut = maxPut > -Infinity ? 1 - probAbove(maxPut, meanST, vol, T) : 0;
     return Math.max(belowCall - belowPut, 0);
   }
-  function outcomeRow(fund, price, S0, vol, m, mu) {
-    var meanST = forwardAtTarget(S0, m, mu), T = m.horizon;
-    var be1 = levelForValue(fund, price, m), be2 = levelForValue(fund, 2 * price, m);
-    var mult = function (p) { return valueAtTarget(fund, quantile(meanST, vol, T, p), m) / price; };
+  function breakpoints(fund) {
+    var ks = [];
+    fund.legs.forEach(function (L) { if (ks.indexOf(L.strike) < 0) ks.push(L.strike); });
+    return ks.sort(function (a, b) { return a - b; });
+  }
+  function risesWithIndex(fund, m) {                    // value at the target date never falls as the ETF rises
+    var ks = breakpoints(fund), pts = [0].concat(ks, [2 * ks[ks.length - 1]]), prev = null;
+    for (var i = 0; i < pts.length; i++) {
+      var v = valueAtTarget(fund, pts[i], m);
+      if (prev !== null && !(v >= prev - 1e-12 * Math.max(1, Math.abs(prev)))) return false;
+      prev = v;
+    }
+    return true;
+  }
+  function zonesAbove(fund, y, m) {                     // ETF ranges [a, b] where a share is worth more than y
+    var ks = breakpoints(fund), pts = [0].concat(ks), out = [];
+    function add(a, b) {
+      if (out.length && Math.abs(out[out.length - 1][1] - a) <= 1e-12 * Math.max(1, a)) out[out.length - 1][1] = b;
+      else out.push([a, b]);
+    }
+    for (var i = 0; i + 1 < pts.length; i++) {
+      var a = pts[i], b = pts[i + 1], fa = valueAtTarget(fund, a, m), fb = valueAtTarget(fund, b, m);
+      if (fa > y && fb > y) add(a, b);
+      else if (fa > y) add(a, a + (y - fa) / (fb - fa) * (b - a));
+      else if (fb > y) add(a + (y - fa) / (fb - fa) * (b - a), b);
+    }
+    var last = pts[pts.length - 1], fl = valueAtTarget(fund, last, m), slope = valueAtTarget(fund, last + 1, m) - fl;
+    if (fl > y) add(last, slope >= 0 ? Infinity : last + (y - fl) / slope);
+    else if (slope > 0) add(last + (y - fl) / slope, Infinity);
+    return out;
+  }
+  function pValueAbove(fund, y, meanST, vol, T, m) {
+    var z = zonesAbove(fund, y, m), s = 0;
+    for (var i = 0; i < z.length; i++)
+      s += probAbove(z[i][0], meanST, vol, T) - (z[i][1] < Infinity ? probAbove(z[i][1], meanST, vol, T) : 0);
+    return s;
+  }
+  function valueQuantile(fund, p, meanST, vol, T, m) {
+    var ks = breakpoints(fund), kmax = ks[ks.length - 1], vals = [];
+    [0].concat(ks, [2 * kmax]).forEach(function (s) { vals.push(valueAtTarget(fund, s, m)); });
+    var vmin = Math.min.apply(null, vals), vmax = Math.max.apply(null, vals);
+    var lo = vmin - 1e-9 * Math.max(1, Math.abs(vmin));
+    var tailUp = valueAtTarget(fund, kmax + 1, m) > valueAtTarget(fund, kmax, m);
+    var hi = Math.max(tailUp ? valueAtTarget(fund, quantile(meanST, vol, T, 1 - 1e-9), m) : vmax, vmax);
+    for (var i = 0; i < 200; i++) {
+      var mid = 0.5 * (lo + hi);
+      if (pValueAbove(fund, mid, meanST, vol, T, m) <= 1 - p) hi = mid; else lo = mid;
+      if (hi - lo < 1e-12 * Math.max(1, Math.abs(hi))) break;
+    }
+    return hi;
+  }
+  function outcomeRow(fund, price, S0, vol, m, mu) {   // see sim.outcome_row: rising payoffs keep the simple path
+    var meanST = forwardAtTarget(S0, m, mu), T = m.horizon, rises = risesWithIndex(fund, m);
+    var be1 = NaN, be2 = NaN, pProfit, pDouble, mult;
+    if (rises) {
+      be1 = levelForValue(fund, price, m); be2 = levelForValue(fund, 2 * price, m);
+      mult = function (p) { return valueAtTarget(fund, quantile(meanST, vol, T, p), m) / price; };
+      pProfit = be1 === be1 ? probAbove(be1, meanST, vol, T) : 0;
+      pDouble = be2 === be2 ? probAbove(be2, meanST, vol, T) : 0;
+    } else {
+      mult = function (p) { return valueQuantile(fund, p, meanST, vol, T, m) / price; };
+      pProfit = pValueAbove(fund, price, meanST, vol, T, m);
+      pDouble = pValueAbove(fund, 2 * price, meanST, vol, T, m);
+    }
     var meanGrowth = (mu === null || mu === undefined) ? Math.exp(m.rate) : 1 + mu;
     return {
       mu: (mu === undefined ? null : mu),
       p_worthless: pWorthless(fund, meanST, vol, T),
-      p_profit: be1 === be1 ? probAbove(be1, meanST, vol, T) : 0,
-      p_double: be2 === be2 ? probAbove(be2, meanST, vol, T) : 0,
+      p_profit: pProfit, p_double: pDouble,
       multiple_p10: mult(0.10), multiple_median: mult(0.50), multiple_p90: mult(0.90),
       median_price_cagr: Math.pow(quantile(meanST, vol, T, 0.5) / S0, 1 / T) - 1,
       median_tr_cagr: meanGrowth * Math.exp(-0.5 * vol * vol) - 1,
-      breakeven: be1, double_level: be2
+      breakeven: be1, double_level: be2, rises: rises, profit_zones: zonesAbove(fund, price, m)
     };
   }
   function requiredGrowth(now, level, T) { return Math.pow(level / now, 1 / T) - 1; }
@@ -232,6 +291,7 @@
     leverage: leverage, volAt: volAt, solveVol: solveVol, oneDay: oneDay, forwardAtTarget: forwardAtTarget,
     probAbove: probAbove, quantile: quantile, valueAtTarget: valueAtTarget, levelForValue: levelForValue,
     pWorthless: pWorthless, outcomeRow: outcomeRow, requiredGrowth: requiredGrowth, ratioAt: ratioAt,
+    risesWithIndex: risesWithIndex, zonesAbove: zonesAbove, pValueAbove: pValueAbove, valueQuantile: valueQuantile,
     DAY: DAY, VOL_FLOOR: VOL_FLOOR
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.DTL = api;
