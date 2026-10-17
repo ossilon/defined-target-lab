@@ -9,6 +9,7 @@
 
   // Presets. Market inputs are the dated example (README facts, close of 2026-10-13); users update them.
   var MARKET = {date: "2026-10-13", etf: 778.01, idx: 7805.45, rate: 4.86};
+  var XX_LAUNCH = "2026-10-01";                        // first trading day (seeded 2026-09-30)
   var FUNDS = {
     XX: {button: "XX", etf: "SPY", per: "share", underlying: "etf", target: "2030-01-10", units: 0.48, strike: 995.01,
          cash: 0.25, fee: 0.99, finish: 9995, q: 0.99, paid: 26.51,
@@ -230,6 +231,13 @@
     return {fund: fund, m: m, vol: vol, ratioNow: v.idx / v.etf, ratioT: v.ratioT};
   }
 
+  function preLaunchNote(v) {                          // before the fund existed: say what the numbers mean
+    if (S.fund !== "XX" || !(v.d0 < utc(XX_LAUNCH))) return "";
+    return ' <span style="color:var(--amb)">Before XX existed (launched ' + XX_LAUNCH + "): this is a hypothetical fund " +
+      "with XX's terms. Type that day's real " + esc($("etfLbl").textContent) + ", S&amp;P, rate and dividend yield, and " +
+      "type a vol rather than a price.</span>";
+  }
+
   // ---------- render ----------
   function render() {
     relabel();                                         // labels follow the fund's index even if we stop early below
@@ -250,7 +258,7 @@
       note.innerHTML = '<span class="err">With these market inputs one ' + per + " is worth between $" + fmt(lo, 2) + " and $" +
         fmt(hi, 2) + " at any volatility, so a price of $" + fmt(v.paid, 2) + " cannot go with them.</span> The inputs describe one " +
         "moment: change the price too, or " + '<button class="k am" type="button" data-fair="' + fair + '">USE FAIR PRICE $' +
-        fmt(fair, per === "contract" ? 0 : 2) + " (AT " + pct(ref, 2) + " VOL)</button>";
+        fmt(fair, per === "contract" ? 0 : 2) + " (AT " + pct(ref, 2) + " VOL)</button>" + preLaunchNote(v);
       return;
     }
     if (!S.volTyped) S.lastVol = M.vol;
@@ -258,6 +266,7 @@
       (specMarket() ? "" : isSP() ? "Market inputs: dated example (close of " + MARKET.date + "); type today's numbers to update every figure." :
        '<span style="color:var(--amb)">The example market inputs are SPY and the S&amp;P 500: type your fund\'s ETF price, its ' +
        "index level, rate and dividend yield.</span>");
+    note.innerHTML += preLaunchNote(v);
     $("rangeOut").textContent = " +" + (1.5 * S.range) + "% / -" + S.range + "%";
     renderTape(v, M); renderTitle(v); renderSummary(v, M);
     if (S.mode === "graph") renderGraph(v, M); else renderGrid(v, M);
