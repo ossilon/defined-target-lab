@@ -26,8 +26,13 @@ exported = set(re.findall(r"(\w+): \w+[,\s]", engine.split("var api = {", 1)[1].
 check("every function the golden file calls is exported by engine.js",
       {c["fn"] for c in doc["cases"]} <= exported, {c["fn"] for c in doc["cases"]} - exported)
 
-for page in sorted((REPO / "web").glob("*.html")) + [REPO / "web" / "engine.js", REPO / "web" / "golden.js"]:
+for page in sorted((REPO / "web").glob("*.html")) + sorted((REPO / "web").glob("*.js")):
     text = page.read_text(encoding="utf-8")
     outside = re.findall(r"""(?:src|href)\s*=\s*["']?(?:https?:)?//""", text) + re.findall(r"@import|url\(\s*['\"]?http", text)
     check(f"{page.name} loads nothing from other sites", not outside, outside)
 check("engine.js stays small (< 40 KB)", len(engine.encode()) < 40_000, len(engine.encode()))
+page_bytes = sum((REPO / "web" / f).stat().st_size for f in ("index.html", "app.js", "engine.js"))
+check("the simulator page loads under 60 KB in total (index.html + app.js + engine.js)", page_bytes < 60_000, page_bytes)
+app = (REPO / "web" / "app.js").read_text(encoding="utf-8")
+check("the page sends nothing anywhere: no fetch, XMLHttpRequest, beacons or storage in app.js",
+      not re.search(r"\bfetch\(|XMLHttpRequest|sendBeacon|localStorage|sessionStorage|document\.cookie|WebSocket", app))

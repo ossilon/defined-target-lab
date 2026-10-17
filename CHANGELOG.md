@@ -9,6 +9,11 @@
 - **Browser engine** (`web/engine.js`, no libraries) and **self-test** (`web/selftest.html`): 716 answers written by
   the Python engine (`scripts/make_golden.py` -> `web/golden.js`, 88 KB) must all match in the browser; it opens
   from a double-clicked file too, and a test fails if the answers go stale.
+- **The simulator page** (`web/index.html`, `web/app.js`): a date x S&P heatmap of one share's P/L, value or
+  leverage, with the odds of finishing above each level; a summary (max loss, break-even, growth needed, leverage,
+  one day's cost split into decay and carry); volatility shift and crash/crush presets; volatility that follows the
+  S&P; the odds table with median-path growth. Inputs can arrive after a `#` in the link (never sent to a server).
+  No libraries, no requests, no storage; 41 KB (about 15 KB compressed).
 - **Volatility slide measured** (FINDINGS F12, `scripts/measure_vol_slide.py`): the 3-year vol at XX's strike rises
   about 1 point per 10% S&P fall, a fifth of VIX1Y's 4.6.
 

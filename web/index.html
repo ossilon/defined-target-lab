@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="What one share of a defined-target call ETF (e.g. XX, S&P 500 Target 10,000 2030) is worth at any S&P level on any date. Runs in your browser. Research tool, not investment advice.">
+<title>XX // TARGET SIM</title>
+<style>
+:root{--bg:#000;--fg:#33ff66;--dim:#1c8a3c;--faint:#0c3318;--amb:#ffb000;--red:#ff3355}
+*{box-sizing:border-box}
+html{color-scheme:dark}
+body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.35 "Cascadia Mono",Consolas,"Lucida Console","Courier New",monospace}
+body:after{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px)}
+.wrap{max-width:1080px;margin:0 auto;padding:12px 16px 32px}
+pre{margin:0;font:inherit;white-space:pre}
+.glow{text-shadow:0 0 6px rgba(51,255,102,.55)}
+.tape{border-bottom:1px solid var(--dim);color:var(--amb);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:4px 0}
+.tape b{color:var(--fg);font-weight:normal}
+.banner{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:10px 0 6px}
+.banner pre{overflow:visible} .banner pre.glow{line-height:1;font-size:14px}
+.banner .t{color:var(--dim)} .banner .t b{color:var(--fg);font-weight:normal}
+.box{border:1px solid var(--dim);margin:12px 0;padding:10px 10px 8px;position:relative}
+.box>h2{position:absolute;top:-9px;left:10px;margin:0;padding:0 6px;background:var(--bg);font-size:12px;font-weight:normal;color:var(--amb)}
+.fields{display:flex;flex-wrap:wrap;gap:6px 18px}
+.f{white-space:nowrap} .f i,.lbl{font-style:normal;color:var(--dim)}
+input[type=text],input[type=date]{width:74px;background:#020;color:var(--fg);border:0;border-bottom:1px solid var(--dim);font:inherit;padding:0 2px}
+input[type=date]{width:118px}
+input.bad{border-bottom-color:var(--red);color:var(--red)}
+input:focus,button:focus-visible{outline:1px solid var(--amb);outline-offset:1px}
+details>summary{cursor:pointer;color:var(--dim);margin-top:6px} details[open]>summary{color:var(--amb)}
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px 14px}
+.sum div i{display:block;font-style:normal;color:var(--dim);font-size:11px} .sum .bad{color:var(--red)} .sum .warn{color:var(--amb)}
+.keys{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0;align-items:center}
+.k{border:1px solid var(--dim);padding:1px 7px;color:var(--fg);background:none;font:inherit;cursor:pointer}
+.k.on{background:var(--fg);color:#000} .k.am{border-color:var(--amb);color:var(--amb)} .k.am.on{background:var(--amb);color:#000}
+.k:disabled{opacity:.4;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:4px 0;color:var(--dim)} .row b{color:var(--fg);font-weight:normal}
+input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;width:260px;max-width:52vw;height:16px}
+input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--dim)}
+input[type=range]::-moz-range-track{height:1px;background:var(--dim)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--fg);margin-top:-5px;box-shadow:0 0 6px rgba(51,255,102,.6)}
+input[type=range]::-moz-range-thumb{width:11px;height:11px;border:0;border-radius:50%;background:var(--fg)}
+.gridwrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+#grid{min-width:780px}
+th,td{padding:3px 5px;text-align:right;font-weight:normal}
+thead th{color:var(--amb);border-bottom:1px solid var(--dim);font-size:11px}
+th.lvl{text-align:left;white-space:nowrap} th.lvl small{display:block;color:var(--dim);font-size:10px}
+th.mv{color:var(--dim)}
+td.c{cursor:crosshair}
+td.p{background:rgba(51,255,102,var(--a));color:#eaffef} td.n{background:rgba(255,51,85,var(--a));color:#ffe9ec}
+td.l{background:rgba(255,176,0,var(--a));color:#fff4dd}
+td.hi{color:#000}
+td.sel{outline:1px solid #fff;outline-offset:-1px}
+td.odds{color:var(--amb);border-left:1px solid var(--dim)}
+tr.now th,tr.now td{border-top:1px dashed var(--fg);border-bottom:1px dashed var(--fg)}
+tr.fin td{text-align:left;color:var(--amb);padding:1px 5px;font-size:11px;white-space:nowrap}
+#readout{color:var(--fg);min-height:1.35em;margin-top:6px;white-space:normal}
+#odds{min-width:660px} #odds td,#odds th{text-align:right} #odds td:first-child,#odds th:first-child{text-align:left}
+#odds tr{cursor:pointer} #odds tr.on td{background:var(--faint);color:var(--amb)}
+.note{color:var(--dim);font-size:11px;margin-top:6px}
+.err{color:var(--red)}
+.nfowrap{text-align:center;margin-top:16px} .nfowrap pre{display:inline-block;text-align:left;color:var(--dim);font-size:11px}
+a{color:var(--amb)}
+</style></head><body><div class="wrap">
+<div class="tape" id="tape">&gt; loading...</div>
+<div class="banner"><pre class="glow" aria-hidden="true">
+ &#9608;&#9608;&#9559;  &#9608;&#9608;&#9559;&#9608;&#9608;&#9559;  &#9608;&#9608;&#9559;
+ &#9562;&#9608;&#9608;&#9559;&#9608;&#9608;&#9556;&#9565;&#9562;&#9608;&#9608;&#9559;&#9608;&#9608;&#9556;&#9565;
+  &#9562;&#9608;&#9608;&#9608;&#9556;&#9565;  &#9562;&#9608;&#9608;&#9608;&#9556;&#9565;
+  &#9608;&#9608;&#9556;&#9608;&#9608;&#9559;  &#9608;&#9608;&#9556;&#9608;&#9608;&#9559;
+ &#9608;&#9608;&#9556;&#9565; &#9608;&#9608;&#9559;&#9608;&#9608;&#9556;&#9565; &#9608;&#9608;&#9559;
+ &#9562;&#9552;&#9565;  &#9562;&#9552;&#9565;&#9562;&#9552;&#9565;  &#9562;&#9552;&#9565;</pre>
+<pre class="t" id="title">&#9617;&#9618;&#9619; <b>DEFINED-TARGET-LAB</b> &#9619;&#9618;&#9617;  TARGET SIM v0.2</pre></div>
+
+<div class="box"><h2>[ INPUT ]</h2>
+<div class="fields">
+<label class="f"><i>PRICE PAID $</i><input type="text" id="paid" inputmode="decimal"></label>
+<label class="f" id="etfField"><i id="etfLbl">SPY</i><input type="text" id="etf" inputmode="decimal"></label>
+<label class="f"><i>S&amp;P</i><input type="text" id="idx" inputmode="decimal"></label>
+<label class="f"><i>DATE</i><input type="date" id="date"></label>
+<label class="f" title="Continuously compounded interest rate to the target date (US Treasury zero rate)"><i>RATE %</i><input type="text" id="rate" inputmode="decimal"></label>
+<label class="f" title="The ETF's dividend yield (continuous). SPY: about 1%"><i>DIV YLD %</i><input type="text" id="q" inputmode="decimal"></label>
+<label class="f" title="Solved from the price paid unless you type one"><i>IMPLIED VOL %</i><input type="text" id="vol" inputmode="decimal"> <i id="volNote">&lt;- SOLVED FROM PRICE</i></label>
+</div>
+<div class="keys" style="margin-top:8px"><span class="lbl">FUND</span><span id="funds"></span>
+<button class="k" id="solve" title="Solve the implied vol from the price paid again">SOLVE VOL</button>
+<button class="k" id="reset" title="Back to the dated example">EXAMPLE</button></div>
+<details><summary>[+] FUND TERMS</summary>
+<div class="fields" style="margin-top:6px">
+<label class="f" title="One-share options per fund share"><i>OPTIONS / SHARE</i><input type="text" id="units" inputmode="decimal"></label>
+<label class="f"><i>STRIKE</i><input type="text" id="strike" inputmode="decimal"></label>
+<label class="f" title="Cash per share: what is left if the options expire worthless"><i>CASH $</i><input type="text" id="cash" inputmode="decimal"></label>
+<label class="f" title="Yearly fee, paid by selling options (conservative)"><i>FEE %</i><input type="text" id="fee" inputmode="decimal"></label>
+<label class="f"><i>TARGET DATE</i><input type="date" id="target"></label>
+<label class="f" title="The S&P level the strike corresponds to on the target date (FINDINGS F7: ~9,995 for XX)"><i>S&amp;P FINISH LINE</i><input type="text" id="finish" inputmode="decimal"></label>
+</div></details>
+<div class="note" id="inNote"></div>
+</div>
+
+<div class="box"><h2>[ SUMMARY ]</h2><div class="sum" id="sum"></div></div>
+
+<div class="box"><h2>[ VOLATILITY ]</h2>
+<div class="row"><span>VOL SHIFT</span><span style="white-space:nowrap">-8 <input type="range" id="shift" min="-8" max="12" step="0.5" value="0" aria-label="Volatility shift in points" style="vertical-align:middle"> +12</span><span style="white-space:nowrap">[ <b id="shiftOut">+0.0 PTS</b> ]</span></div>
+<div class="keys" id="presets"></div>
+<div class="row">VOL FOLLOWS S&amp;P <button class="k on" id="slideOn" aria-pressed="true">ON</button>
+<label><input type="text" id="slide" inputmode="decimal" style="width:44px"> PTS PER -10% S&amp;P</label>
+<span style="color:var(--amb)" id="slideNote">[MEASURED 2024-26 // FINDINGS F12]</span></div>
+<div class="note">The shift moves every column's volatility. "Vol follows the S&amp;P" adds the slide for each 10% the S&amp;P sits below today (and takes it off above). Measured: about +1 point per -10% for 3-year S&amp;P options; one-year volatility (VIX1Y) moves about +4.6.</div>
+</div>
+
+<div class="box"><h2 id="gridTitle">[ P/L PER SHARE // DATE x S&amp;P ]</h2>
+<div class="keys"><span class="lbl">VIEW</span><span id="views"></span>
+<span class="lbl" style="margin-left:10px">RANGE</span><input type="range" id="range" min="10" max="60" step="5" value="40" style="width:120px" aria-label="Range of S&P moves"><b id="rangeOut" style="font-weight:normal"></b></div>
+<div class="gridwrap"><table id="grid"></table></div>
+<div id="readout">&gt; hover or tap a cell</div>
+<div class="note" id="gridNote"></div>
+</div>
+
+<div class="box"><h2>[ ODDS AT THE TARGET DATE ]</h2>
+<div class="gridwrap"><table id="odds"></table></div>
+<div class="note" id="oddsNote"></div>
+</div>
+
+<div class="nfowrap"><pre id="nfo"></pre></div>
+</div>
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body></html>
