@@ -26,10 +26,16 @@ def _sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+WINDOWS_DEVICES = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+
+
 def safe_relative(path_text, *roots):
     """True if a manifest path is relative, has no '..' part, and resolves inside every given root (symlinks too)."""
     rel = Path(path_text)
     if rel.is_absolute() or rel.anchor or ".." in rel.parts or not rel.parts:
+        return False
+    # Windows device names (NUL, CON, COM1 ...) and ':' (alternate data streams) are never data files (audit B10e)
+    if any(":" in part or part.split(".")[0].upper() in WINDOWS_DEVICES for part in rel.parts):
         return False
     for base in roots:
         base = Path(base).resolve()

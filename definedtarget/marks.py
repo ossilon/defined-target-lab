@@ -27,10 +27,13 @@ BASE_SPREAD, BASE_MODE = 0.0, "discrete"
 
 def load_dividends(root=None):
     """[(ex_date, amount)] from data/external/spy_dividends.csv (inside parse.captured_by: the copy saved by then)."""
-    text = parse.external_text(root, "spy_dividends.csv")
+    text, cut = parse.external_text(root, "spy_dividends.csv"), parse._CAPTURED_BY[0]
+    if text is None and cut is not None:
+        raise FileNotFoundError(f"no copy of data/external/spy_dividends.csv saved by the cutoff {cut} (dated copies "
+                                "start with the first capture run of v0.2.3; a capture, scripts/verdicts.py or the "
+                                "dividend import saves one)")
     if text is None:
-        raise FileNotFoundError("data/external/spy_dividends.csv missing (or no copy saved by the review cutoff) - "
-                                "run scripts/import_spy_dividends.py")
+        raise FileNotFoundError("data/external/spy_dividends.csv missing - run scripts/import_spy_dividends.py")
     return sorted((date.fromisoformat(r["ex_date"]), float(r["amount"])) for r in csv.DictReader(io.StringIO(text)))
 
 

@@ -99,6 +99,8 @@ with tempfile.TemporaryDirectory() as tmp:
           and not (local / "escape.txt").exists(), n)
     check("A13: the path check itself", not cloud_import.safe_relative("../x", local)
           and not cloud_import.safe_relative("C:/x", local) and cloud_import.safe_relative("raw/a/b.csv", local))
+    check("B10e: Windows device names and alternate data streams are refused",
+          not any(cloud_import.safe_relative(p, local) for p in ("NUL", "raw/CON.csv", "raw/a.csv:ads", "raw/com1")))
 with tempfile.TemporaryDirectory() as tmp:
     clone, local = Path(tmp) / "research-captures", Path(tmp) / "data"
     cloud = clone / "roundhill"

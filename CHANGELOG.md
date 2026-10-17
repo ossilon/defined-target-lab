@@ -2,8 +2,10 @@
 
 ## v0.2.3 (2026-10-17)
 
-Fixes from an independent external audit of v0.2.2. The audit reproduced each defect with synthetic data; its probes
-now run as regression tests. No frozen claim, band, window or minimum sample changed.
+Fixes from an independent external audit of v0.2.2, checked by a second independent audit before release. The
+external audit reproduced each defect with synthetic data; its probes now run as regression tests, except one
+documented reading (price sources) and one design point left for a later release (each test loads every input). No
+frozen claim, band, window or minimum sample changed.
 
 ### Fixed
 - **H1 and H9** count only creation events before 2027-10-14 and never review after that date (P2: they never
@@ -11,13 +13,19 @@ now run as regression tests. No frozen claim, band, window or minimum sample cha
 - **H5** reads "no data" when the dividend file has no December 2026 ex-date. It no longer moves on to a later
   ex-date; only fewer than 3 qualifying calls moves the test.
 - **H7** reads one fixed cutoff, the end of its review date (2030-01-10, UTC), so its result cannot change with the
-  run date.
+  run date. Open point: the issuer publishes its reference close the next day, so as P2 stands only an official
+  close added by the end of 2030-01-10 can decide H7, while H7's test names the issuer's close. A clarification is
+  planned for protocol P3.
 - **H19** applies the listed-quote rule to its call-spread legs: a quote whose implied vol does not solve (for example
-  a price above the no-arbitrage bound) counts as missing, and so does a spread probability outside 0-1.
+  a price above the no-arbitrage bound, or a zero bid) counts as missing, and so does a spread probability outside
+  0-1. It moves to other strikes only when 9,600 or 10,400 is no longer quoted at all.
 - **Hand-maintained inputs** (`closes.csv`, `tv_closes.csv`, `spy_dividends.csv`, `void_events.csv`) are saved as
   dated copies on each capture run, and a review reads the copy that existed by its cutoff. A later edit no longer
-  changes an earlier review.
-- **Recording** waits while the data behind a fund-data verdict hold an unexplained accounting-identity failure.
+  changes an earlier review. H5's December dividend must therefore be imported by 2026-12-21 23:59:59 UTC; from
+  2026-12-01 the status line says so.
+- **Recording** waits while the data behind a fund-data verdict hold an unexplained accounting-identity failure, or
+  while a void event dated before the review is known but was missing from the data captured by then (P1 voids by
+  the event's date).
 - **Regressions** with a regressor that never moves raise an error instead of returning a meaningless coefficient.
 - **Captures** never overwrite raw bytes: copies saved in the same second each get their own file. The cloud
   import refuses a manifest path outside the data folder and keeps every earlier copy on a repeated name clash.

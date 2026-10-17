@@ -10,7 +10,8 @@ The ledger (forward/predictions.jsonl) is append-only and hash-chained: a record
 --record asks for nothing but refuses anything not final, any --as-of date after today, and any verdict whose
 deciding day has not ended yet (UTC; a later capture could still change it). After recording, re-render
 forward/HYPOTHESES.md and push. Each review reads only the files downloaded by its review date (P2). Prints
-aggregates only.
+aggregates only. Each run also saves dated copies of the hand-maintained input files (data/raw/external/), so later
+reviews can read the version that existed by their date.
 """
 import sys
 from datetime import date, datetime, timezone
@@ -56,7 +57,7 @@ def main(argv, ledger_path=ledger.DEFAULT_PATH, now=None, results_fn=None, probl
         parse.snapshot_external()                       # save today's copy of the hand-maintained inputs (P2, A07)
         latest = cached("latest")
         results_fn = lambda d: verdicts.all_results(d, latest, cached("first"))  # noqa: E731
-        problems_fn = lambda d: latest(verdicts.cutoff_for(d)).problems          # noqa: E731
+        problems_fn = lambda d: verdicts.record_blockers(latest(verdicts.cutoff_for(d)), latest(None), d)  # noqa: E731
     results = results_fn(today)
     print(f"Verdicts as of {today} (definedtarget {__version__}); provisional numbers are not verdicts\n")
     for r in results:

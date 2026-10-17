@@ -516,6 +516,23 @@ imp.listed.loc[imp.listed["strike"].isin([9600, 10400]), ["bid", "ask"]] += 1000
 r = status("H19", AFTER, imp)
 check("A03: H19 call prices above their upper bound are missing closes (no pass)", r.status != "pass" and r.n == 0,
       r.line())
+nb = synth()
+ext_rows = []
+for d, g in nb.listed.groupby("close_date"):
+    c9600 = float(g.loc[g["strike"] == 9600, "bid"].iloc[0])
+    ext_rows += [{"close_date": d, "strike": 9500, "bid": c9600 + 60.0, "ask": c9600 + 60.0},
+                 {"close_date": d, "strike": 10500, "bid": 40.0, "ask": 40.0}]
+nb.listed = pd.concat([nb.listed, pd.DataFrame(ext_rows)], ignore_index=True)
+for bad_quote in ("impossible", "one-sided"):
+    x = copy.deepcopy(nb)
+    named = x.listed["strike"].isin([9600, 10400])
+    if bad_quote == "impossible":
+        x.listed.loc[named, ["bid", "ask"]] += 100000
+    else:
+        x.listed.loc[named, "bid"] = 0.0
+    r = status("H19", AFTER, x)
+    check(f"B10e: a 9,600 / 10,400 quote that is {bad_quote} is a missing close, not a switch to 9,500 / 10,500",
+          r.status != "pass" and r.n == 0, r.line())
 
 # A04 (reading, not a defect): a flow-day fall beyond rounding is a fall; the pass rule fails only rises.
 x4 = synth()
@@ -592,18 +609,25 @@ with tempfile.TemporaryDirectory() as tmp:
     check("A07: a review after the copies were saved sees the edits",
           c7.prices[date(2026, 10, 14)][0] == 850.0 and len(c7.voids) == 1, (c7.prices, c7.voids))
     check("A07: a good synthetic file passes every accounting identity", a7.problems == [], a7.problems)
+    # B10e: the review itself reads the cutoff copy (no void), but recording waits on the late notice (P1 rule 6)
+    r_late = V.review_window_test("H3", date(2027, 4, 15), lambda _: a7)
+    blockers = V.record_blockers(a7, c7, date(2027, 4, 14))
+    ready, waiting = V.to_record([r_late], [], "2027-04-22T00:00:00Z", lambda d: V.record_blockers(a7, c7, d))
+    check("B10e: a void notice dated before the review but saved after it blocks recording a pass or fail",
+          r_late.status == "pass" and len(blockers) == 1 and "void" in blockers[0] and not ready
+          and "void" in waiting[0][4], (r_late.line(), blockers, waiting))
 
 with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp)
     raw_fixture(root, bad=True)
     x8 = V.load(root, cut)
     r8 = V.review_window_test("H3", date(2027, 4, 15), lambda _: x8)
-    ready, waiting = V.to_record([r8], [], "2027-04-16T00:00:00Z", lambda d: x8.problems)
+    ready, waiting = V.to_record([r8], [], "2027-04-16T00:00:00Z", lambda d: V.record_blockers(x8, x8, d))
     check("A08: an unexplained accounting failure keeps a fund-data verdict from being recorded",
           bool(x8.problems) and not ready and "accounting" in waiting[0][4], (x8.problems, waiting))
     r7 = V.Result("H7", "pass", "2030-01-10", 1, {"trigger": 9990.0}, decided=V.XX_EXPIRY)
     check("A08: index-only H7 does not wait on fund accounting",
-          len(V.to_record([r7], [], "2030-01-11T00:00:01Z", lambda d: x8.problems)[0]) == 1)
+          len(V.to_record([r7], [], "2030-01-11T00:00:01Z", lambda d: V.record_blockers(x8, x8, d))[0]) == 1)
 
 # A15: without a December 2026 row, H5 reads 'no data' and never moves to March.
 x15 = synth()
@@ -618,6 +642,9 @@ rk.vix1y = {d: 22.0 for d in rk.vix1y}
 r = status("H4", AFTER, rk)
 check("a rank-deficient regression (VIX1Y never moves) gives 'error', not a verdict",
       r.status == "error" and "rank" in r.note, r.line())
+r = status("H17", AFTER, rk)
+check("B10e: H17's information stat cannot block H17's own verdict when VIX1Y never moves",
+      r.status in ("pass", "fail") and "not computable" in str(r.stats.get("xx_h10_coef_same_closes")), r.line())
 
 # A12: the verdicts' runtime dependency is declared; openpyxl is an optional extra.
 pyproject = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")

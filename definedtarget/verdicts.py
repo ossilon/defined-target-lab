@@ -36,12 +36,17 @@ Plain words
     close where the issuer file is missing (external audit A06);
   * hand-maintained inputs (closes.csv, tv_closes.csv, spy_dividends.csv, void_events.csv) are read as the copy
     saved by the cutoff (parse.snapshot_external, run by each capture and by scripts/verdicts.py);
-  * H1 and H9 count only events before 2027-10-14 and never review after it; a void event before then gives 'void',
-    not 'inconclusive' (external audit A01, A02). H5's first test is the December 2026 ex-date: without one in the
-    dividend file it reads 'no data' and never moves to a later ex-date (A15). H7 reads the data captured by the end
-    of 2030-01-10, its review date (A05);
+  * H1 and H9 count only events dated before 2027-10-14 and never review after it; a void event before then gives
+    'void' at the deadline, not 'inconclusive' (external audit A01, A02; until the deadline it shows 'pending').
+    An H1 event is dated by its day-after close, an H9 event by its creation day, so a creation on 2027-10-13 counts
+    for H9 but not for H1. H5's first test is the December 2026 ex-date: without one in the dividend file it reads
+    'no data' and never moves to a later ex-date (A15); its amount must be in a copy saved by 2026-12-21 23:59:59
+    UTC. H7 reads the data captured by the end of 2030-01-10, its review date (A05, P2 rule 2). The issuer publishes
+    its reference close the next day, so as P2 stands only an official close added to closes.csv by then can decide
+    H7, and H7's test names the issuer's close: a clarification is planned for protocol P3;
   * a fund-data verdict is not recorded while the data captured by its deciding date hold an unexplained
-    accounting-identity failure (reconcile.failures; A08);
+    accounting-identity failure (A08), or while a void event dated before that date is known now but was missing
+    from those data (P1 rule 6 dates a void by the event; P2 dates the data by capture): record_blockers;
   * H1's "day after" is the next close with an implied vol (normally the next session); H14's "10th session" is
     the session 10 sessions after the window's start; H17's n counts closes (the regression uses n - 1 changes);
   * void events: "affected" means the hypothesis reads fund data (NAV, holdings, marks, market price). H7 and H7a
@@ -424,7 +429,7 @@ def listed_vols(inp, strikes=(10000,)):
                 row[k] = tuple(s * 100 for s in ivs)
             else:
                 bad.add(k)
-        out[close] = (row, q, DF, bad)
+        out[close] = (row, q, DF, bad, set(raw))       # set(raw): strikes present at all, usable or not
     return out
 
 
@@ -460,35 +465,40 @@ def t_h17(inp, end):
     xx = [r for r in xx if not any(np.isnan(r))]
     if len(xx) >= 4:
         dy, ds, dv = zip(*xx)
-        stats["xx_h10_coef_same_closes"] = ols(dy, [ds, dv])[0][1]
+        try:                                           # information only: it must never block H17's own verdict
+            stats["xx_h10_coef_same_closes"] = ols(dy, [ds, dv])[0][1]
+        except ValueError:
+            stats["xx_h10_coef_same_closes"] = "not computable (rank-deficient)"
     return len(days), -0.20 <= coef[1] <= 0.05, stats
 
 
 def t_h19(inp, end):
     f = frame(inp).set_index("as_of")
     lv = listed_vols(inp, strikes=())
-    quoted_after = {}                                  # strike -> last close with a usable quote
+    present_after = {}                                 # strike -> last close where it was quoted at all
     for d, v in lv.items():
-        for k in v[1]:
-            quoted_after[k] = max(quoted_after.get(k, d), d)
+        for k in v[4]:
+            present_after[k] = max(present_after.get(k, d), d)
 
     newest = max(lv) if lv else None
 
-    def pick(k, q, d, fallback):
+    def pick(k, q, present, d, fallback):
         if k in q:
             return k
-        if quoted_after.get(k, date.min) > d or d == newest:   # quoted again later, or no later close to tell:
+        if k in present:                               # quoted but unusable: a missing close, not a lapse (B10e)
+            return None
+        if present_after.get(k, date.min) > d or d == newest:   # quoted again later, or no later close to tell:
             return None                                          # a gap, not a lapse -> missing close
         return fallback
 
     gaps, missing = [], 0
-    for d, (row, q, DF, bad) in lv.items():
+    for d, (row, q, DF, bad, present) in lv.items():
         if not (LISTED_START <= d < end) or d not in f.index or np.isnan(f.loc[d, "prob"]):
             continue
         below = [k for k in q if k < 10000]
         above = [k for k in q if k > 10000]
-        k1 = pick(9600, q, d, max(below) if below else None)
-        k2 = pick(10400, q, d, min(above) if above else None)
+        k1 = pick(9600, q, present, d, max(below) if below else None)
+        k2 = pick(10400, q, present, d, min(above) if above else None)
         if k1 is None or k2 is None:
             missing += 1
             continue
@@ -660,7 +670,8 @@ def review_events(hid, today, provider, provider_first=None):
         if v:
             return Result(hid, "void", str(EVENT_FINAL), note=f"{v[1]} on {v[0]}", decided=EVENT_FINAL)
         n = len([e for e in stat(inp_f)[0] if e[0] < EVENT_FINAL])
-        return Result(hid, "inconclusive", str(EVENT_FINAL), n, note="fewer than 15 creation events by 2027-10-14",
+        what = "day-after-creation closes" if hid == "H1" else "creation days with listed quotes"
+        return Result(hid, "inconclusive", str(EVENT_FINAL), n, note=f"fewer than 15 {what} before 2027-10-14",
                       decided=EVENT_FINAL)
 
     inp = provider(cutoff_for(min(today, EVENT_FINAL)))   # P2 rule 3: these tests never extend past the deadline
@@ -729,7 +740,11 @@ def review_h5(today, provider):
     inp = provider(cutoff_for(today))
     exs = [ex for ex, _ in inp.dividends if ex >= date(2026, 12, 1)]
     if not exs:
-        return Result("H5", "pending", str(H5_FIRST_REVIEW), note="no December 2026 ex-date in the dividend file yet")
+        note = "no December 2026 ex-date in the dividend file yet"
+        if today >= date(2026, 12, 1):                 # the amount must be in a copy saved by the review cutoff
+            note += ("; import it (py -I scripts\\import_spy_dividends.py) by 2026-12-21 23:59:59 UTC, or H5 reads "
+                     "'no data'")
+        return Result("H5", "pending", str(H5_FIRST_REVIEW), note=note)
     if exs[0] > date(2026, 12, 31):                     # the frozen first test is December's: never skip it (A15)
         return Result("H5", "no data", str(H5_FIRST_REVIEW),
                       note=f"the dividend file has no December 2026 ex-date (its first later one is {exs[0]})")
@@ -826,9 +841,8 @@ INDEX_ONLY = {"H7", "H7a"}                     # read S&P 500 and SPY closes onl
 def to_record(results, entries, now_utc, problems=None):
     """(ready, waiting): final words not yet in the ledger. A word is ready only after the day whose captured data
     decided it has ended (its cutoff is in the past at `now_utc`, an ISO 'YYYY-MM-DDTHH:MM:SSZ' string); before
-    that, a later capture could still change it, so it waits. `problems(decided)` (optional) lists unexplained
-    accounting-identity failures in the data captured by that date: a fund-data word waits until they are explained
-    (reconcile.KNOWN_EXCEPTIONS) or the data are corrected (external audit A08)."""
+    that, a later capture could still change it, so it waits. `problems(decided)` (optional) lists reasons not to
+    record yet (record_blockers): a fund-data word waits until each is resolved."""
     done, ready, waiting = recorded(entries), [], []
     for r in results:
         items = []
@@ -849,11 +863,27 @@ def to_record(results, entries, now_utc, problems=None):
                 waiting.append((r, cp, word, decided, f"record after {decided} ends (UTC)"))
             elif problems is not None and r.id not in INDEX_ONLY and problems(decided):
                 bad = problems(decided)
-                waiting.append((r, cp, word, decided, f"{len(bad)} unexplained accounting failure(s), first "
-                                                      f"{bad[0][0]} {bad[0][1]}: explain or correct them first"))
+                waiting.append((r, cp, word, decided, f"{len(bad)} problem(s) to resolve first; first: {bad[0]}"))
             else:
                 ready.append((r, cp, word))
     return ready, waiting
+
+
+def record_blockers(at_cutoff, latest, decided):
+    """Reasons a fund-data verdict decided on `decided` must not be recorded yet (empty list: none).
+
+    - An unexplained accounting-identity failure in the data captured by then (external audit A08): explain it in
+      reconcile.KNOWN_EXCEPTIONS or correct the data.
+    - A void event dated before `decided` that is known now but was not in the data captured by then (audit B10e).
+      P2 has each review read the data captured by its date, but P1 rule 6 voids a hypothesis by the event's date:
+      a notice typed in late must not let a pass or fail through. Record 'void' by hand, naming the event, or
+      explain why the event does not apply.
+    at_cutoff / latest: Inputs loaded with the deciding cutoff and with none (today's files)."""
+    out = [f"{d} {c}: unexplained accounting-identity failure" for d, c in at_cutoff.problems]
+    known = set(at_cutoff.voids)
+    out += [f"void event '{e}' on {d}, dated before {decided} but not in the data captured by then (P1 rule 6)"
+            for d, e in latest.voids if d < decided and (d, e) not in known]
+    return out
 
 
 # ---------------------------------------------------------------- loading real data
