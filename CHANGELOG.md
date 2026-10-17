@@ -54,6 +54,9 @@
   recomputation of whole paths, and the martingale identity. `scripts/xx_paths_study.py` and FINDINGS F17: at the
   risk-neutral drift XX touches 2x in 49% of futures but ends above its start in 23%; the slide rule pulls the
   expected mid-life mark about 5% below today's price, an open question for the vol model.
+- **Slide-rule test on real history** (`scripts/slide_rule_test.py`, FINDINGS F18): 198 synthetic XXs on real S&P
+  paths since 2007, marked with constant vol, the slide rule and real VIX1Y. VIX1Y moves 3.5 times as much as the rule;
+  the vol assumption moves XX's drawdowns and peaks by several points, so path statistics carry a model-risk band.
 
 ## v0.2.3 (2026-10-17)
 

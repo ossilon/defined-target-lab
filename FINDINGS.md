@@ -379,3 +379,33 @@ today's price embeds a dynamic the rule leaves out (the skew moving with the ind
 Caveats: lognormal paths at one vol; fee taken by selling options, cash flat (sim.py's model, not the full fund
 engine); no FLEX trading costs, closure or roll scenarios; touch probabilities count every session, which is not a
 trading result (a sale at 2x pays the bid, after costs, on a day you must recognize).
+
+**F18. On real S&P paths since 2007, how XX's vol is assumed to move changes its drawdowns and peaks by several
+points: real VIX1Y moves 3.5 times as much as the slide rule, cushions the crashes, and trims the rallies.** Measured
+2026-10-17 (`scripts/slide_rule_test.py`; outputs fixed in the script before the run; S&P 500 closes and Cboe VIX1Y,
+2007-01-03 to 2026-10-09; 198 synthetic XXs started every 21 sessions, each with 815 real sessions of life, about 6
+separate spans; XX's shape, cash and fee; rate and dividend yield held constant; all three markings start at
+0.77 x VIX1Y on the start day, 0.77 being the design review's implied-vol / VIX1Y multiplier, an assumption):
+
+| Marking | Largest NAV drawdown: median / 90th pct | Longest underwater (sessions): median / 90th | Highest NAV / start: median / 90th | Touched 2x |
+|---|---|---|---|---|
+| A constant vol | 91.5% / 99.7% | 460 / 752 | 2.68 / 6.48 | 69.2% |
+| B slide rule, 1 point per -10% | 91.7% / 99.7% | 464 / 765 | 2.53 / 6.48 | 65.2% |
+| C real VIX1Y x 0.77 | 84.0% / 99.6% | 464 / 757 | 2.52 / 6.50 | 70.7% |
+
+Start by start, the largest drawdown under B and C differs by a median 3.3 points (90th percentile 13.0), and the
+peak by 0.04x (0.37x); A against C: 2.7 (14.7) points and 0.07x (0.28x). The slide rule is no closer to the
+VIX1Y-marked life than constant vol is. Measured on these data, 0.77 x VIX1Y rises 3.55 points per -10% of the S&P
+(daily changes; 3.27 over 63 sessions), against the rule's 1.00, consistent with F12's 4.6 points for VIX1Y itself.
+
+What it says about the F17 mystery: in the long rallies vol fell as the S&P rose, and both moving-vol markings peak
+lower than constant vol (median 2.52-2.53x against 2.68x): the mechanism behind F17's mid-life gap (a cut to vol
+when the option is most sensitive to it) appears on real paths too. In the crashes vol spiked and cushioned the
+mark (median drawdown 84% against 92%). Which vol is right for XX's own option is still open: F12 found the listed
+3-year strike vol moving about 1 point per -10%, far less than VIX1Y; the frozen hypotheses H4 and H10 test the
+vendor's marks directly.
+
+Consequence for the engine's outputs: XX's path statistics (drawdowns, peaks, touches) carry a model-risk band from
+the vol rule of several points; report them under at least two vol rules until H4/H10 or the v0.3.x vol model
+settles it. Caveats: 2007-2023 starts include strong rallies (69% touched 2x), so these are not odds; rates were
+held constant (they were near zero in 2009-15 and 2020-21); the 0.77 multiplier is assumed, not fitted.
