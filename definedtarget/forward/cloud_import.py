@@ -26,6 +26,20 @@ def _sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def safe_relative(path_text, *roots):
+    """True if a manifest path is relative, has no '..' part, and resolves inside every given root (symlinks too)."""
+    rel = Path(path_text)
+    if rel.is_absolute() or rel.anchor or ".." in rel.parts or not rel.parts:
+        return False
+    for base in roots:
+        base = Path(base).resolve()
+        try:
+            (base / rel).resolve().relative_to(base)
+        except ValueError:
+            return False
+    return True
+
+
 def import_files(capture_repo, root=None):
     """Copy files the cloud saved into the local data root. Returns counts: imported, already, refused."""
     cloud_root = Path(capture_repo) / CLOUD_DATA
@@ -39,15 +53,20 @@ def import_files(capture_repo, root=None):
         if (rec["url"], rec["fetched_utc"]) in seen:
             counts["already"] += 1
             continue
+        if not safe_relative(rec["path"], cloud_root, root):
+            counts["refused"] += 1                         # absolute, '..' or outside a data root (external audit A13)
+            continue
         src = cloud_root / rec["path"]
         if not src.exists() or _sha256(src) != rec.get("sha256"):
             counts["refused"] += 1                         # missing or altered: never import it
             continue
         dst_rel = Path(rec["path"])
         dst = root / dst_rel
-        if dst.exists() and _sha256(dst) != rec["sha256"]:  # a different local copy: keep both
-            dst_rel = dst_rel.with_name(f"{dst_rel.stem}__cloud{dst_rel.suffix}")
+        n = 1
+        while dst.exists() and _sha256(dst) != rec["sha256"]:   # a different local copy: keep both, never overwrite
+            dst_rel = dst_rel.with_name(f"{Path(rec['path']).stem}__cloud{'' if n == 1 else n}{dst_rel.suffix}")
             dst = root / dst_rel
+            n += 1
         dst.parent.mkdir(parents=True, exist_ok=True)
         if not dst.exists():
             shutil.copyfile(src, dst)

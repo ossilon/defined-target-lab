@@ -62,6 +62,8 @@ def enc(x):
 SHORT_VOL = {"legs": [{"kind": "call", "sign": -1, "strike": 995.01, "units": 0.48}], "cash": 100.0, "fee": 0.0}
 PUT = {"legs": [{"kind": "put", "sign": 1, "strike": 700.0, "units": 1.0}], "cash": 0.5, "fee": 0.0}
 SHORT_CALL = {"legs": [{"kind": "call", "sign": -1, "strike": 900.0, "units": 1.0}], "cash": 120.0, "fee": 0.0}
+# A sold call whose falling tail runs far past twice its strike (external audit A11)
+NAKED = {"legs": [{"kind": "call", "sign": -1, "strike": 100.0, "units": 1.0}], "cash": 200.0, "fee": 0.0}
 # The page's QQQ and DIA spec examples, with their example markets
 QQQ_FUND = {"legs": [{"kind": "call", "sign": 1, "strike": 1214.57, "units": 0.76}], "cash": 0.25, "fee": 0.0099}
 DIA_FUND = {"legs": [{"kind": "call", "sign": 1, "strike": 747.03, "units": 1.79}], "cash": 0.25, "fee": 0.0099}
@@ -69,7 +71,7 @@ MKT_QQQ = {"rate": 0.0486, "divYield": 0.0055, "horizon": 1185 / 365}
 MKT_DIA = {"rate": 0.0486, "divYield": 0.016, "horizon": 1185 / 365}
 # Funds and markets are written once and referred to as "@NAME" in the cases (keeps the file small)
 OBJECTS = {"XX": XX, "SPREAD": SPREAD, "STRANGLE": STRANGLE, "LISTED": LISTED, "SHORT_VOL": SHORT_VOL, "PUT": PUT,
-           "SHORT_CALL": SHORT_CALL, "QQQ_FUND": QQQ_FUND, "DIA_FUND": DIA_FUND, "MKT": MKT, "MKT_SPX": MKT_SPX,
+           "SHORT_CALL": SHORT_CALL, "NAKED": NAKED, "QQQ_FUND": QQQ_FUND, "DIA_FUND": DIA_FUND, "MKT": MKT, "MKT_SPX": MKT_SPX,
            "MKT_ZERO": MKT_ZERO, "MKT_QQQ": MKT_QQQ, "MKT_DIA": MKT_DIA}
 
 
@@ -181,6 +183,13 @@ def build():
             add("solveVol", [f, price, 778.01, MKT], sim.solve_vol(fp_, price, 778.01, mp_), {"rel": 1e-9, "abs": 1e-11},
                 name)
             add("levelForValue", [f, price, MKT], sim.level_for_value(fp_, price, mp_), note=name)
+    # The sold call's value falls as the index rises, so its p-quantile is the payoff at the (1 - p)-quantile of S_T:
+    # an oracle that does not use the bisection under test (external audit A11)
+    np_, zm_ = fund_py(NAKED), mkt_py(MKT_ZERO)
+    for p in (0.01, 0.1, 0.5, 0.9):
+        add("valueQuantile", [NAKED, p, 180.0, 0.2, 1.0, MKT_ZERO],
+            sim.value_at_target(np_, sim.quantile(180.0, 0.2, 1.0, 1.0 - p), zm_), {"rel": 1e-9, "abs": 1e-9},
+            "sold call, far tail: oracle")
     # The listed call at its real scale, and the QQQ / DIA examples at their example markets (every engine call app.js makes)
     for name, f, mk, S in (("LISTED", LISTED, MKT_SPX, 7805.45), ("QQQ_FUND", QQQ_FUND, MKT_QQQ, 750.0),
                            ("DIA_FUND", DIA_FUND, MKT_DIA, 520.0)):

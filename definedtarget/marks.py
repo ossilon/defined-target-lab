@@ -26,11 +26,12 @@ BASE_SPREAD, BASE_MODE = 0.0, "discrete"
 
 
 def load_dividends(root=None):
-    path = fetch.data_dir(root) / "external" / "spy_dividends.csv"
-    if not path.exists():
-        raise FileNotFoundError("data/external/spy_dividends.csv missing - run scripts/import_spy_dividends.py")
-    with open(path, encoding="utf-8") as fh:
-        return sorted((date.fromisoformat(r["ex_date"]), float(r["amount"])) for r in csv.DictReader(fh))
+    """[(ex_date, amount)] from data/external/spy_dividends.csv (inside parse.captured_by: the copy saved by then)."""
+    text = parse.external_text(root, "spy_dividends.csv")
+    if text is None:
+        raise FileNotFoundError("data/external/spy_dividends.csv missing (or no copy saved by the review cutoff) - "
+                                "run scripts/import_spy_dividends.py")
+    return sorted((date.fromisoformat(r["ex_date"]), float(r["amount"])) for r in csv.DictReader(io.StringIO(text)))
 
 
 USER_CLOSE_FILES = (("tv_closes.csv", "TradingView close"), ("closes.csv", "user-supplied close"))
@@ -48,10 +49,10 @@ def load_spots(root=None):
     """
     out = {}
     for name, label in USER_CLOSE_FILES:
-        path = fetch.data_dir(root) / "external" / name
-        if not path.exists():
+        text = parse.external_text(root, name)        # inside parse.captured_by: the copy saved by the cutoff
+        if text is None:
             continue
-        df = pd.read_csv(path)
+        df = pd.read_csv(io.StringIO(text))
         df["sym"] = df["symbol"].astype(str).str.split(":").str[-1].str.upper()
         for d, g in df.groupby("date"):
             vals = dict(zip(g["sym"], g["close"]))

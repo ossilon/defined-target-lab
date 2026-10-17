@@ -27,6 +27,7 @@ def run(root=None, report_dir=None, now=None, capture=True):
 
     if capture:
         records = roundhill.capture_all(root=root, now=now) + external.capture_all(root=root, now=now)
+        records += parse.snapshot_external(root=root, now=now)   # dated copies of the hand-maintained inputs (P2)
     for r in records:
         bad = r["result"] in ("network_error", "invalid", "invalid_repeat", "http_error")
         if bad and r["source"] == roundhill.SOURCE and not r["name"].startswith("holdings_"):

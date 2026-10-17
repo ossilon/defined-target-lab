@@ -117,15 +117,28 @@ def capture(url, name, source, expect_prefix, root=None, now=None, getter=http_g
 
     day_dir = root / "raw" / source / now.strftime("%Y-%m-%d")
     day_dir.mkdir(parents=True, exist_ok=True)
-    target = day_dir / name
-    if target.exists():                               # a second, different copy on the same day
-        stem, dot, ext = name.rpartition(".")
-        target = day_dir / (f"{stem}__{now.strftime('%H%M%S')}.{ext}" if dot else f"{name}__{now.strftime('%H%M%S')}")
-    target.write_bytes(body)
+    target = new_file(day_dir, name, now, body)
     rec["path"] = target.relative_to(root).as_posix()
     rec["result"] = "saved" if valid else "invalid"
     _append_manifest(root, rec)
     return rec
+
+
+def new_file(folder, name, now, body):
+    """Write `body` to a file that did not exist: `name`, else name__HHMMSS, else name__HHMMSS_2, _3 ... Exclusive
+    creation ('xb'), so raw bytes are never overwritten, even by two captures in the same second (external audit A10)."""
+    stem, dot, ext = name.rpartition(".")
+    base, tail = (stem, f".{ext}") if dot else (name, "")
+    base = f"{base}__{now.strftime('%H%M%S')}"
+    i = 0
+    while True:
+        cand = name if i == 0 else f"{base}{tail}" if i == 1 else f"{base}_{i}{tail}"
+        try:
+            with open(folder / cand, "xb") as fh:
+                fh.write(body)
+            return folder / cand
+        except FileExistsError:
+            i += 1
 
 
 def pause():

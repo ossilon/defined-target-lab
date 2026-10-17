@@ -265,10 +265,13 @@ def value_quantile(fund, p, mean_st, vol, T, m):
     """The p-quantile of a share's value at the target date, for any payoff shape (bisection on the exact chance)."""
     ks = _breakpoints(fund)
     vals = [value_at_target(fund, s, m) for s in [0.0] + ks + [2.0 * ks[-1]]]
-    lo = min(vals) - 1e-9 * max(1.0, abs(min(vals)))
-    tail_up = value_at_target(fund, ks[-1] + 1.0, m) > value_at_target(fund, ks[-1], m)
-    hi = value_at_target(fund, quantile(mean_st, vol, T, 1.0 - 1e-9), m) if tail_up else max(vals)
-    hi = max(hi, max(vals))
+    # Beyond the top strike the value keeps rising or falling without limit (or stays flat); bracket that tail at
+    # the far quantile of S_T, so a sold call's lower tail is reachable too (external audit A11)
+    top, beyond = value_at_target(fund, ks[-1], m), value_at_target(fund, ks[-1] + 1.0, m)
+    far = value_at_target(fund, quantile(mean_st, vol, T, 1.0 - 1e-9), m)
+    lo = min(vals + ([far] if beyond < top else []))
+    lo -= 1e-9 * max(1.0, abs(lo))
+    hi = max(vals + ([far] if beyond > top else []))
     for _ in range(200):
         mid = 0.5 * (lo + hi)
         if p_value_above(fund, mid, mean_st, vol, T, m) <= 1.0 - p:

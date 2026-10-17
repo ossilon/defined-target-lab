@@ -16,7 +16,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
-from definedtarget.forward import fetch  # noqa: E402
+from definedtarget.forward import fetch, parse  # noqa: E402
 
 
 def from_yahoo(path):
@@ -51,6 +51,8 @@ def main(argv):
             w.writerow([d, f"{a:.6f}", f"{src}, imported {stamp}"])
     print(f"wrote {len(rows)} dividends {rows[0][0]} .. {rows[-1][0]} to {out}")
     print("last 4:", rows[-4:])
+    snap = parse.snapshot_external(names=("spy_dividends.csv",))     # dated copy, so reviews see it from now on
+    print("saved copy:", snap[0]["result"], snap[0].get("path") or snap[0].get("same_as"))
     return 0
 
 

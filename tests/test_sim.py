@@ -152,3 +152,13 @@ sp_row = sim.outcome_row(spread, v_sp, S0, VOL, M)
 check("a call spread still counts as rising (it flattens above the upper strike, never falls)", sp_row["rises"] is True)
 check("index ratio runs in a straight line from today to the target date",
       sim.ratio_at(0.0, 10.03, 10.045, 3.0) == 10.03 and abs(sim.ratio_at(1.5, 10.03, 10.045, 3.0) - 10.0375) < 1e-12)
+
+# External audit A11: a sold call's value falls without limit as the index rises, so its p-quantile is the payoff at
+# the (1 - p)-quantile of S_T. The 90th percentile of S_T (about 228) lies beyond twice the strike (200).
+naked = sim.Fund((sim.Leg("call", -1, 100.0, 1.0),), cash=200.0)
+m0 = sim.Market(0.0, 0.0, 1.0)
+for p in (0.01, 0.1, 0.5):
+    want = sim.value_at_target(naked, sim.quantile(180.0, 0.2, 1.0, 1.0 - p), m0)
+    got = sim.value_quantile(naked, p, 180.0, 0.2, 1.0, m0)
+    check(f"A11: sold call p={p} value quantile equals the payoff at S_T's {1 - p:.2f} quantile ({want:.4f})",
+          abs(got - want) < 1e-6, (got, want))

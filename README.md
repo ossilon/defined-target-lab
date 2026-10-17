@@ -108,10 +108,11 @@ The code here computes each fact from the issuer's public daily files and public
 
 ## Install and run
 
-Install Python 3.10+ with numpy, pandas and numba.
+Install Python 3.10+ with numpy, pandas, numba and scipy (scipy runs the verdicts' Welch tests; openpyxl is needed
+only to read saved Cboe FLEX reports).
 
 ```
-pip install numpy pandas numba
+pip install numpy pandas numba scipy
 py -m definedtarget calc --price 25 --spot 760 --iv 0.17 --rate 0.048 --as-of 2026-10-01
 py tests/run_tests.py
 ```
@@ -120,7 +121,8 @@ For the daily tracker, read [data/README.md](data/README.md). The scripts downlo
 public market data into your own `data/` folder. Run every script that reads downloaded files with `py -I`
 (isolated mode), e.g., `py -I scripts/daily.py`.
 
-To install the package itself, run `pip install .` from the repository folder. The `definedtarget calc` and
+To install the package itself, run `pip install .` from the repository folder (`pip install .[flex]` adds
+openpyxl). The `definedtarget calc` and
 `prospectus` commands then work from any folder; `daily` and `report` read and write the repository's `data/` and
 `forward/` folders, so run them from a copy of the repository. [CHANGELOG.md](CHANGELOG.md) lists each release;
 [LICENSE](LICENSE) gives the MIT terms.

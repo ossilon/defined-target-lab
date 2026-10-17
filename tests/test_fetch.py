@@ -79,3 +79,13 @@ check("weekly file fetched 8 days ago is due",
       external.due([{**seen[0], "fetched_utc": "2026-10-06T03:00:00Z"}], "u", T0, "weekly"))
 check("'once' file already saved is never re-fetched", not external.due(seen, "u", T0, "once"))
 check("a file never fetched is always due", external.due([], "u", T0, "once"))
+
+# External audit A10: three different copies in the same second each keep their own file and their own bytes.
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    recs = [fetch.capture("https://example.test/s.csv", "s.csv", "test", None, root=root, now=T0,
+                          getter=server(body)) for body in (b"v1\n", b"v2\n", b"v3\n")]
+    paths = [r["path"] for r in recs]
+    check("A10: same-second copies get three distinct files", len(set(paths)) == 3, paths)
+    check("A10: every saved file still matches the hash in its manifest record",
+          all(fetch.sha256((root / r["path"]).read_bytes()) == r["sha256"] for r in recs))

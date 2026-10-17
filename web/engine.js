@@ -246,10 +246,12 @@
   function valueQuantile(fund, p, meanST, vol, T, m) {
     var ks = breakpoints(fund), kmax = ks[ks.length - 1], vals = [];
     [0].concat(ks, [2 * kmax]).forEach(function (s) { vals.push(valueAtTarget(fund, s, m)); });
-    var vmin = Math.min.apply(null, vals), vmax = Math.max.apply(null, vals);
-    var lo = vmin - 1e-9 * Math.max(1, Math.abs(vmin));
-    var tailUp = valueAtTarget(fund, kmax + 1, m) > valueAtTarget(fund, kmax, m);
-    var hi = Math.max(tailUp ? valueAtTarget(fund, quantile(meanST, vol, T, 1 - 1e-9), m) : vmax, vmax);
+    // bracket a tail that keeps rising or falling beyond the top strike at the far quantile of S_T (sim.py, audit A11)
+    var top = valueAtTarget(fund, kmax, m), beyond = valueAtTarget(fund, kmax + 1, m);
+    var far = valueAtTarget(fund, quantile(meanST, vol, T, 1 - 1e-9), m);
+    var lo = Math.min.apply(null, beyond < top ? vals.concat([far]) : vals);
+    lo -= 1e-9 * Math.max(1, Math.abs(lo));
+    var hi = Math.max.apply(null, beyond > top ? vals.concat([far]) : vals);
     for (var i = 0; i < 200; i++) {
       var mid = 0.5 * (lo + hi);
       if (pValueAbove(fund, mid, meanST, vol, T, m) <= 1 - p) hi = mid; else lo = mid;

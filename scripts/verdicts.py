@@ -20,6 +20,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
 from definedtarget import __version__, ledger, verdicts  # noqa: E402
+from definedtarget.forward import parse  # noqa: E402
 
 
 def cached(holdings):
@@ -32,8 +33,8 @@ def cached(holdings):
     return provider
 
 
-def main(argv, ledger_path=ledger.DEFAULT_PATH, now=None, results_fn=None):
-    """`ledger_path`, `now` and `results_fn` exist for the tests; the command line uses the defaults."""
+def main(argv, ledger_path=ledger.DEFAULT_PATH, now=None, results_fn=None, problems_fn=None):
+    """`ledger_path`, `now`, `results_fn` and `problems_fn` exist for the tests; the command line uses the defaults."""
     now = now or datetime.now(timezone.utc)
     today = now.date()
     record = None
@@ -51,17 +52,21 @@ def main(argv, ledger_path=ledger.DEFAULT_PATH, now=None, results_fn=None):
         print(f"STOP: --record with --as-of {today}, after today ({now.date()}): a verdict is recorded only from data "
               "that exists; nothing recorded")
         return 1
-    results = (results_fn or (lambda d: verdicts.all_results(d, cached("latest"), cached("first"))))(today)
+    if results_fn is None:
+        parse.snapshot_external()                       # save today's copy of the hand-maintained inputs (P2, A07)
+        latest = cached("latest")
+        results_fn = lambda d: verdicts.all_results(d, latest, cached("first"))  # noqa: E731
+        problems_fn = lambda d: latest(verdicts.cutoff_for(d)).problems          # noqa: E731
+    results = results_fn(today)
     print(f"Verdicts as of {today} (definedtarget {__version__}); provisional numbers are not verdicts\n")
     for r in results:
         print(r.line())
     entries = ledger.read(ledger_path)
-    due, waiting = verdicts.to_record(results, entries, now.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    due, waiting = verdicts.to_record(results, entries, now.strftime("%Y-%m-%dT%H:%M:%SZ"), problems_fn)
     if due:
         print("\nready to record: " + ", ".join(f"{r.id}{'/' + cp if cp else ''} {w}" for r, cp, w in due))
-    for r, cp, w, decided in waiting:
-        when = f"after {decided} ends (UTC)" if decided else "(no deciding date: not recordable)"
-        print(f"waiting: {r.id}{'/' + cp if cp else ''} {w}, record {when}")
+    for r, cp, w, decided, why in waiting:
+        print(f"waiting: {r.id}{'/' + cp if cp else ''} {w}: {why}")
     if record is None:
         return 0
     wanted = [d for d in due if record == "due" or d[0].id == record]

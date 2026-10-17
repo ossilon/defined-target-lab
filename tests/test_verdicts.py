@@ -485,3 +485,141 @@ bad.voids = None                                          # breaks every void ch
 res = V.all_results(AFTER, provider_of(bad))
 check("C10: a crash in one review shows as 'error' for that hypothesis only",
       any(x.status == "error" for x in res) and any(x.status != "error" for x in res))
+
+# 14. Independent external audit of v0.2.2 (2026-10-17): each check covers a defect the audit reproduced on v0.2.2,
+#     or documents how a frozen rule is read (A04).
+import copy  # noqa: E402
+
+from definedtarget.forward import parse as P  # noqa: E402
+
+# A01: H1 and H9 never extend: a 15th event after 2027-10-14 leaves them inconclusive.
+cre_late = set(sorted(d for d in DAYS if d >= date(2026, 11, 2))[::12][:14]) | {date(2027, 10, 20)}
+late = synth(creations=cre_late, creation_jump=0.3, seed=3, iv_spy=0.0, iv_vix=0.0, gap_listed=0.0)
+for d in cre_late:
+    late.model.loc[late.model["as_of"] == d, "iv_disc_0bp"] += 0.003
+for hid in ("H1", "H9"):
+    r = status(hid, date(2027, 11, 1), late)
+    check(f"A01: {hid} with its 15th event after 2027-10-14 stays inconclusive (P2: never extends)",
+          r.status == "inconclusive" and r.review == "2027-10-14" and r.n == 14, r.line())
+
+# A02: a void event before the deadline gives 'void', not 'inconclusive', below 15 events.
+gone = synth()
+gone.voids = [(date(2027, 2, 1), "fund liquidated (synthetic notice)")]
+for hid in ("H1", "H9"):
+    r = status(hid, date(2027, 10, 15), gone)
+    check(f"A02: {hid} below 15 events with a liquidation is void, naming it", r.status == "void"
+          and "liquidated" in r.note, r.line())
+
+# A03: impossible H19 quotes (above the no-arbitrage bound) count as missing, never as a pass.
+imp = synth()
+imp.listed.loc[imp.listed["strike"].isin([9600, 10400]), ["bid", "ask"]] += 100000
+r = status("H19", AFTER, imp)
+check("A03: H19 call prices above their upper bound are missing closes (no pass)", r.status != "pass" and r.n == 0,
+      r.line())
+
+# A04 (reading, not a defect): a flow-day fall beyond rounding is a fall; the pass rule fails only rises.
+x4 = synth()
+x4.state.loc[20:, "shares_outstanding"] = 50000.0
+x4.state.loc[20:, "contracts_per_share"] = 237 / 50000
+x4.state["contracts"] = x4.state["shares_outstanding"] * x4.state["contracts_per_share"]
+x4.state.loc[20, "flow_day"] = True
+x4.state.loc[21, "day_after_flow"] = True
+r = status("H2", AFTER, x4)
+check("A04: a 3-contract flow-day shortfall is reported for information; H2 follows its frozen pass rule",
+      r.status == "pass" and r.stats["flow_day_shortfalls"] == 1, r.line())
+
+# A05: H7 reads one fixed cutoff, the end of 2030-01-10.
+h7base = synth(last=date(2026, 10, 20))
+
+
+def h7_provider(cutoff):
+    x = copy.copy(h7base)
+    trig = 9990.0 if cutoff <= V.cutoff_for(V.XX_EXPIRY) else 10100.0
+    x.prices = {V.XX_EXPIRY: (1000.0, 1000.0 * trig / V.XX_STRIKE)}
+    return x
+
+
+a5, b5 = V.review_h7(date(2030, 1, 12), h7_provider), V.review_h7(date(2030, 1, 19), h7_provider)
+check("A05: H7 gives the same word whenever it runs, decided by the data captured by 2030-01-10",
+      a5.status == b5.status == "pass" and a5.decided == b5.decided == V.XX_EXPIRY, (a5.line(), b5.line()))
+check("A05: without the expiry closes by that date H7 reads 'no data'",
+      V.review_h7(date(2030, 1, 12), lambda c: copy.copy(h7base)).status == "no data")
+
+
+# A07 and A08 through the real loader: synthetic raw files, captured like the real ones.
+def save_raw(root, name, text, at=datetime(2026, 10, 16, 21, 0, tzinfo=timezone.utc)):
+    return fetch.capture("https://example.invalid/" + name, name, "synthetic", None, root=root, now=at,
+                         getter=lambda u: (200, {}, text.encode()))
+
+
+def raw_fixture(root, bad=False):
+    ext = root / "external"
+    ext.mkdir(parents=True)
+    (ext / "spy_dividends.csv").write_text("ex_date,amount\n2025-12-19,2\n2026-03-20,2\n2026-06-18,2\n2026-09-18,2\n",
+                                           encoding="utf-8")
+    (ext / "closes.csv").write_text("date,symbol,close\n2026-10-14,SPY,778\n2026-10-14,SPX,7780\n", encoding="utf-8")
+    mv = 2000000 if bad else 1440000
+    body = ",".join(P.HOLDINGS_COLUMNS) + "\n"
+    body += f"10/15/2026,XX,4SPY  300110C00995010,x,Call,288,50,{mv},99%,1454545.45,60000,6,\n"
+    body += "10/15/2026,XX,FGXXX,x,Cash,14545.45,1,14545.45,1%,1454545.45,60000,6,Y\n"
+    save_raw(root, "holdings_10142026.csv", body)
+    save_raw(root, "xx_daily.csv", "Fund Ticker,Rate Date,NAV,Market Price\nXX,10/14/2026,24.24,24.24\n")
+    save_raw(root, "par_yield_curve_2026.csv",
+             "Date,1 Mo,6 Mo,1 Yr,2 Yr,3 Yr,5 Yr,10 Yr,30 Yr\n10/14/2026,4,4,4,4,4,4,4,4\n")
+    save_raw(root, "VIX1Y_History.csv", "DATE,CLOSE\n10/14/2026,22\n")
+    P.snapshot_external(root, now=datetime(2026, 10, 16, 21, 0, tzinfo=timezone.utc))
+
+
+from definedtarget.forward import fetch  # noqa: E402
+
+cut = V.cutoff_for(date(2027, 4, 14))
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    raw_fixture(root)
+    a7 = V.load(root, cut)
+    (root / "external" / "closes.csv").write_text("date,symbol,close\n2026-10-14,SPY,850\n2026-10-14,SPX,8500\n",
+                                                 encoding="utf-8")
+    (root / "external" / "spy_dividends.csv").write_text(
+        "ex_date,amount\n2025-12-19,3\n2026-03-20,3\n2026-06-18,3\n2026-09-18,3\n", encoding="utf-8")
+    (root / "external" / "void_events.csv").write_text("date,event,source\n2027-01-01,liquidation,notice added later\n",
+                                                      encoding="utf-8")
+    P.snapshot_external(root, now=datetime(2027, 5, 1, tzinfo=timezone.utc))      # copies saved after the cutoff
+    b7 = V.load(root, cut)
+    check("A07: later edits to closes, dividends and void notices do not reach an earlier review",
+          a7.prices == b7.prices and a7.dividends == b7.dividends and b7.voids == []
+          and a7.model["iv_disc_0bp"].tolist() == b7.model["iv_disc_0bp"].tolist(), (a7.prices, b7.prices, b7.voids))
+    c7 = V.load(root, V.cutoff_for(date(2027, 5, 2)))
+    check("A07: a review after the copies were saved sees the edits",
+          c7.prices[date(2026, 10, 14)][0] == 850.0 and len(c7.voids) == 1, (c7.prices, c7.voids))
+    check("A07: a good synthetic file passes every accounting identity", a7.problems == [], a7.problems)
+
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    raw_fixture(root, bad=True)
+    x8 = V.load(root, cut)
+    r8 = V.review_window_test("H3", date(2027, 4, 15), lambda _: x8)
+    ready, waiting = V.to_record([r8], [], "2027-04-16T00:00:00Z", lambda d: x8.problems)
+    check("A08: an unexplained accounting failure keeps a fund-data verdict from being recorded",
+          bool(x8.problems) and not ready and "accounting" in waiting[0][4], (x8.problems, waiting))
+    r7 = V.Result("H7", "pass", "2030-01-10", 1, {"trigger": 9990.0}, decided=V.XX_EXPIRY)
+    check("A08: index-only H7 does not wait on fund accounting",
+          len(V.to_record([r7], [], "2030-01-11T00:00:01Z", lambda d: x8.problems)[0]) == 1)
+
+# A15: without a December 2026 row, H5 reads 'no data' and never moves to March.
+x15 = synth()
+x15.dividends = [(date(2026, 9, 18), 1.89), (date(2027, 3, 19), 1.95)]
+r = status("H5", date(2027, 4, 15), x15)
+check("A15: no December 2026 ex-date in the file: H5 'no data', not a March verdict", r.status == "no data"
+      and "December" in r.note, r.line())
+
+# Rank: a regressor that never moves has no coefficient: 'error', never a verdict.
+rk = synth()
+rk.vix1y = {d: 22.0 for d in rk.vix1y}
+r = status("H4", AFTER, rk)
+check("a rank-deficient regression (VIX1Y never moves) gives 'error', not a verdict",
+      r.status == "error" and "rank" in r.note, r.line())
+
+# A12: the verdicts' runtime dependency is declared; openpyxl is an optional extra.
+pyproject = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+check("A12: pyproject declares scipy, and openpyxl as the 'flex' extra",
+      '"scipy"' in pyproject.split("dependencies = ", 1)[1].split("\n", 1)[0] and 'flex = ["openpyxl"]' in pyproject)

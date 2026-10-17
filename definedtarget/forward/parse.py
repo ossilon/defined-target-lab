@@ -86,6 +86,36 @@ def read_text(root, rec):
     return (fetch.data_dir(root) / rec["path"]).read_bytes().decode("utf-8-sig")
 
 
+# Hand-maintained inputs in data/external (closes you add, SPY dividends, void-event notices). They are edited in
+# place, so each capture run also saves a dated copy of their bytes (raw/external/<UTC date>/, manifest record,
+# never overwritten). A review then reads the copy that existed by its cutoff, like every downloaded file (P2).
+EXTERNAL_SOURCE = "external"
+EXTERNAL_FILES = ("spy_dividends.csv", "closes.csv", "tv_closes.csv", "void_events.csv")
+
+
+def snapshot_external(root=None, now=None, names=EXTERNAL_FILES):
+    """Save the current bytes of each hand-maintained file that exists. An unchanged file adds an 'unchanged' line."""
+    root = fetch.data_dir(root)
+    out = []
+    for name in names:
+        path = root / "external" / name
+        if path.exists():
+            body = path.read_bytes()
+            out.append(fetch.capture(f"local:external/{name}", name, EXTERNAL_SOURCE, None, root=root, now=now,
+                                     getter=lambda url, b=body: (200, {}, b)))
+    return out
+
+
+def external_text(root, name):
+    """Text of a hand-maintained file, or None if it does not exist. Outside captured_by(): the working file in
+    data/external. Inside: the latest saved copy captured by the cutoff (a later edit never reaches an earlier review)."""
+    if _CAPTURED_BY[0] is None:
+        path = fetch.data_dir(root) / "external" / name
+        return path.read_bytes().decode("utf-8-sig") if path.exists() else None
+    recs = [r for r in saved_versions(root, name) if r["name"] == name and r.get("source") == EXTERNAL_SOURCE]
+    return read_text(root, recs[-1]) if recs else None
+
+
 def holdings_rows(text, as_of, version, accounts=None):
     """Rows of one holdings file as dicts (all accounts, or only those listed)."""
     reader = csv.reader(io.StringIO(text))

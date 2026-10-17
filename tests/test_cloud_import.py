@@ -81,3 +81,36 @@ with tempfile.TemporaryDirectory() as tmp:
     check("a cloud reply is filed with its own read time and P2's window check",
           len(q) == 1 and str(q[0]["close"]) == "2026-10-16" and q[0]["in_window"], q)
     check("importing the same reply again files nothing new", cloud_import.import_quotes(clone, root=local) == [])
+
+# External audit A13: a manifest path that leaves the data folder is refused; A10 pattern: a second different copy
+# under the same name gets its own file, never an overwrite.
+with tempfile.TemporaryDirectory() as tmp:
+    clone, local = Path(tmp) / "research-captures", Path(tmp) / "data"
+    cloud = clone / "roundhill"
+    marker = put(clone, "escape.txt", b"marker")                        # outside the cloud data root
+    abs_target = Path(tmp) / "abs.txt"
+    absb = put(tmp, "abs.txt", b"absolute")
+    rec = {"url": "u/m", "name": "m.csv", "source": "roundhill", "fetched_utc": "2026-10-17T04:00:00Z", "result": "saved"}
+    manifest(cloud, [{**rec, **marker, "path": "../escape.txt"},
+                     {**rec, **absb, "url": "u/abs", "path": abs_target.as_posix()}])
+    n = cloud_import.import_files(clone, root=local)
+    check("A13: a '..' or absolute manifest path is refused, and nothing lands outside the data folder",
+          n == {"imported": 0, "already": 0, "refused": 2} and not (local.parent / "escape.txt").exists()
+          and not (local / "escape.txt").exists(), n)
+    check("A13: the path check itself", not cloud_import.safe_relative("../x", local)
+          and not cloud_import.safe_relative("C:/x", local) and cloud_import.safe_relative("raw/a/b.csv", local))
+with tempfile.TemporaryDirectory() as tmp:
+    clone, local = Path(tmp) / "research-captures", Path(tmp) / "data"
+    cloud = clone / "roundhill"
+    rel = "raw/roundhill/2026-10-17/xx_daily.csv"
+    v1 = put(cloud, rel, b"cloud v1\n")
+    put(local, rel, b"local\n")
+    put(local, "raw/roundhill/2026-10-17/xx_daily__cloud.csv", b"an older cloud copy\n")
+    manifest(local, [])
+    manifest(cloud, [{"url": "u/xx", "name": "xx_daily.csv", "source": "roundhill",
+                      "fetched_utc": "2026-10-17T04:00:00Z", "result": "saved", **v1}])
+    cloud_import.import_files(clone, root=local)
+    check("a second name collision gets a new file (__cloud2), and both earlier copies keep their bytes",
+          (local / "raw/roundhill/2026-10-17/xx_daily__cloud2.csv").read_bytes() == b"cloud v1\n"
+          and (local / "raw/roundhill/2026-10-17/xx_daily__cloud.csv").read_bytes() == b"an older cloud copy\n"
+          and (local / rel).read_bytes() == b"local\n")

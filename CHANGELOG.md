@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.2.3 (2026-10-17)
+
+Fixes from an independent external audit of v0.2.2. The audit reproduced each defect with synthetic data; its probes
+now run as regression tests. No frozen claim, band, window or minimum sample changed.
+
+### Fixed
+- **H1 and H9** count only creation events before 2027-10-14 and never review after that date (P2: they never
+  extend). A void event before the deadline now gives "void" instead of "inconclusive".
+- **H5** reads "no data" when the dividend file has no December 2026 ex-date. It no longer moves on to a later
+  ex-date; only fewer than 3 qualifying calls moves the test.
+- **H7** reads one fixed cutoff, the end of its review date (2030-01-10, UTC), so its result cannot change with the
+  run date.
+- **H19** applies the listed-quote rule to its call-spread legs: a quote whose implied vol does not solve (for example
+  a price above the no-arbitrage bound) counts as missing, and so does a spread probability outside 0-1.
+- **Hand-maintained inputs** (`closes.csv`, `tv_closes.csv`, `spy_dividends.csv`, `void_events.csv`) are saved as
+  dated copies on each capture run, and a review reads the copy that existed by its cutoff. A later edit no longer
+  changes an earlier review.
+- **Recording** waits while the data behind a fund-data verdict hold an unexplained accounting-identity failure.
+- **Regressions** with a regressor that never moves raise an error instead of returning a meaningless coefficient.
+- **Captures** never overwrite raw bytes: copies saved in the same second each get their own file. The cloud
+  import refuses a manifest path outside the data folder and keeps every earlier copy on a repeated name clash.
+- **Simulator** (Python and browser): the value percentiles of a sold call now reach its falling tail beyond twice
+  the strike. Example: a sold 100 call with 200 cash, S_T mean 180, vol 20%, one year: the 10th percentile is 72.02,
+  not 100. New golden cases check this against an independent formula.
+- **Packaging**: scipy is a declared dependency; openpyxl (reading saved Cboe FLEX reports) is the optional `flex`
+  extra, and its tests skip without it.
+- **Golden-file test**: compares numbers within each case's tolerance, so a fresh run on another platform passes.
+
+### Documented
+- H2: the frozen pass rule fails only an unexplained rise. A flow-day fall beyond rounding is judged by the
+  total-fall band and is now reported for information (`flow_day_shortfalls`).
+- Price sources: SPY and S&P 500 changes never use TradingView closes (P2 rule 7); the base-case implied vol may use
+  one where the issuer file is missing (P1 rule 2).
+
 ## v0.2.2 (2026-10-17)
 
 ### Added

@@ -13,12 +13,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
-from definedtarget.forward import external, roundhill  # noqa: E402
+from definedtarget.forward import external, parse, roundhill  # noqa: E402
 
 
 def main(argv):
     records = roundhill.capture_all(docs=True if "--docs" in argv else None)
     records += external.capture_all(force="--external" in argv)     # weekly unless --external
+    records += parse.snapshot_external()        # dated copies of closes / dividends / void notices (P2: by the cutoff)
     for rec in records:
         print(f"{rec['result']:<13} {rec.get('status', '-')!s:<4} {rec['name']:<34} "
               f"last-modified={rec.get('last_modified')}  {rec.get('path') or rec.get('same_as') or rec.get('error', '')}")

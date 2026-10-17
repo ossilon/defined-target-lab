@@ -10,7 +10,10 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
-dependencies = ["numpy", "pandas", "numba"]
+dependencies = ["numpy", "pandas", "numba", "scipy"]   # scipy: the Welch tests of H1 and H9
+
+[project.optional-dependencies]
+flex = ["openpyxl"]    # reading saved Cboe FLEX reports (definedtarget.forward.cboe_flex.extract_fills)
 keywords = ["etf", "options", "leaps", "flex-options", "black-scholes", "implied-volatility", "monte-carlo",
             "forward-testing"]
 classifiers = [

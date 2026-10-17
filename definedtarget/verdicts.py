@@ -28,7 +28,20 @@ Plain words
     strike has lapsed (absent from that close and every later one, with at least one later close to show it); any
     other gap is a missing close;
   * H2: contracts per share may not rise on clean days; on flow days a rise must stay within one contract per
-    creation unit (rounding); other days (the day after a flow day, ex-dates) are unconstrained, as the text says;
+    creation unit (rounding); other days (the day after a flow day, ex-dates) are unconstrained, as the text says.
+    The frozen pass rule fails only an "unexplained rise": a flow-day fall beyond rounding is a fall, judged by the
+    total-fall band, and is reported as `flow_day_shortfalls` for information (external audit A04);
+  * prices: SPY and S&P 500 *changes* follow P2 rule 7 (issuer reference closes, else official closes in closes.csv,
+    never TradingView); *model values* (base-case implied vol, elasticity) follow P1 rule 2, which allows a TradingView
+    close where the issuer file is missing (external audit A06);
+  * hand-maintained inputs (closes.csv, tv_closes.csv, spy_dividends.csv, void_events.csv) are read as the copy
+    saved by the cutoff (parse.snapshot_external, run by each capture and by scripts/verdicts.py);
+  * H1 and H9 count only events before 2027-10-14 and never review after it; a void event before then gives 'void',
+    not 'inconclusive' (external audit A01, A02). H5's first test is the December 2026 ex-date: without one in the
+    dividend file it reads 'no data' and never moves to a later ex-date (A15). H7 reads the data captured by the end
+    of 2030-01-10, its review date (A05);
+  * a fund-data verdict is not recorded while the data captured by its deciding date hold an unexplained
+    accounting-identity failure (reconcile.failures; A08);
   * H1's "day after" is the next close with an implied vol (normally the next session); H14's "10th session" is
     the session 10 sessions after the window's start; H17's n counts closes (the regression uses n - 1 changes);
   * void events: "affected" means the hypothesis reads fund data (NAV, holdings, marks, market price). H7 and H7a
@@ -95,6 +108,7 @@ class Inputs:
     listed_forward: object = None          # function(close) -> (F, DF, tau) for the listed expiry, in SPY terms
     voids: list = field(default_factory=list)
     cutoff: str = None
+    problems: list = field(default_factory=list)   # unexplained accounting-identity failures [(close, check)], test period
 
 
 @dataclass
@@ -185,6 +199,8 @@ def ols(y, X, intercept=True):
     y = np.asarray(y, float)
     X = np.column_stack([np.ones(len(y))] + [np.asarray(x, float) for x in X]) if intercept else \
         np.column_stack([np.asarray(x, float) for x in X])
+    if np.linalg.matrix_rank(X) < X.shape[1]:          # e.g. a regressor that never moved: no coefficient exists
+        raise ValueError("regression design is rank-deficient (a regressor has no independent variation)")
     coef, *_ = np.linalg.lstsq(X, y, rcond=None)
     resid = y - X @ coef
     dof = max(len(y) - X.shape[1], 1)
@@ -207,7 +223,7 @@ def t_h2(inp, end):
     f = frame(inp)
     g = f[(f["as_of"] >= TEST_START) & (f["as_of"] < end)].dropna(subset=["cps", "contracts", "shares"])
     full = f.dropna(subset=["cps", "contracts", "shares"]).reset_index(drop=True)
-    rises = []
+    rises, shortfalls = [], []
     for i in range(1, len(full)):
         r, p = full.iloc[i], full.iloc[i - 1]
         if not (TEST_START <= r["as_of"] < end):
@@ -220,11 +236,14 @@ def t_h2(inp, end):
             units = max(1.0, math.ceil(abs(r["shares"] - p["shares"]) / CREATION_UNIT))
             if r["contracts"] > expected + units + 1e-9:
                 rises.append(str(r["as_of"]))
+            elif r["contracts"] < expected - units - 1e-9:
+                shortfalls.append(str(r["as_of"]))     # information only: the pass rule fails rises, not falls
     if g.empty:
         return 0, None, {}
     fall = 1.0 - g["cps"].iloc[-1] / H2_BASE
     ok = not rises and 0.005 <= fall <= 0.015
-    return len(g), ok, {"total_fall": fall, "unexplained_rises": len(rises), "last_close": str(g["as_of"].iloc[-1])}
+    return len(g), ok, {"total_fall": fall, "unexplained_rises": len(rises), "flow_day_shortfalls": len(shortfalls),
+                        "last_close": str(g["as_of"].iloc[-1])}
 
 
 def _share_in(values, lo, hi):
@@ -372,12 +391,17 @@ def listed_vols(inp, strikes=(10000,)):
     """{close: (ivs, quotes, DF, bad)} for counted listed readings, P1/P2 conventions.
 
     ivs: {strike: (bid_iv, mid_iv, ask_iv) in points} for the strikes asked for, only when the quote is two-sided and
-    all three vols solve strictly inside the solver's limits; quotes: {strike: (bid, ask)}, two-sided quotes only;
-    bad: the asked-for strikes whose quote was present but unusable (they count as missing for that close)."""
+    all three vols solve strictly inside the solver's limits; quotes: {strike: (bid, ask)}, usable quotes only (two-sided
+    and a mid whose vol solves inside the limits, so a price beyond the no-arbitrage bounds never counts; external
+    audit A03); bad: the asked-for strikes whose quote was present but unusable (missing for that close)."""
     from . import pricing
     out = {}
     if inp.listed is None or inp.listed.empty or inp.listed_forward is None:
         return out
+
+    def solves(s):
+        return np.isfinite(s) and pricing.VOL_LO * 10 < s < pricing.VOL_HI * 0.99
+
     for close, g in inp.listed.groupby("close_date"):
         if close not in inp.prices or any(np.isnan(inp.prices[close])):
             continue
@@ -385,7 +409,8 @@ def listed_vols(inp, strikes=(10000,)):
         ratio = spx / spy
         F, DF, tau = inp.listed_forward(close)
         raw = {int(r.strike): (float(r.bid), float(r.ask)) for r in g.itertuples()}
-        q = {k: v for k, v in raw.items() if two_sided(*v)}
+        q = {k: v for k, v in raw.items() if two_sided(*v)
+             and solves(pricing.implied_vol((v[0] + v[1]) / 2 / ratio, F, k / ratio, DF, tau))}
         row, bad = {}, set()
         for k in strikes:
             if k not in raw:
@@ -395,7 +420,7 @@ def listed_vols(inp, strikes=(10000,)):
                 continue
             b, a = q[k]
             ivs = [pricing.implied_vol(x / ratio, F, k / ratio, DF, tau) for x in (b, (b + a) / 2, a)]
-            if all(np.isfinite(s) and pricing.VOL_LO * 10 < s < pricing.VOL_HI * 0.99 for s in ivs):
+            if all(solves(s) for s in ivs):
                 row[k] = tuple(s * 100 for s in ivs)
             else:
                 bad.add(k)
@@ -469,6 +494,9 @@ def t_h19(inp, end):
             continue
         mid = {k: sum(q[k]) / 2 for k in (k1, k2)}
         p = (mid[k1] - mid[k2]) / ((k2 - k1) * DF)
+        if not 0.0 <= p <= 1.0:                         # a spread outside its own bounds is no probability: missing
+            missing += 1
+            continue
         gaps.append(100 * (p - f.loc[d, "prob"]))
     if not gaps:
         return 0, None, {}
@@ -625,18 +653,30 @@ def review_events(hid, today, provider, provider_first=None):
     the same statistic from the first saved version of each holdings file (`provider_first`); it informs, the latest
     version decides."""
     stat = h1_stat if hid == "H1" else h9_stat
-    inp = provider(cutoff_for(today))
+
+    def deadline():                                     # 2027-10-14: fewer than 15 events by then -> inconclusive,
+        inp_f = provider(cutoff_for(EVENT_FINAL))       # unless a void event came first (P1 rule 6; audit A01, A02)
+        v = void_before(inp_f, EVENT_FINAL)
+        if v:
+            return Result(hid, "void", str(EVENT_FINAL), note=f"{v[1]} on {v[0]}", decided=EVENT_FINAL)
+        n = len([e for e in stat(inp_f)[0] if e[0] < EVENT_FINAL])
+        return Result(hid, "inconclusive", str(EVENT_FINAL), n, note="fewer than 15 creation events by 2027-10-14",
+                      decided=EVENT_FINAL)
+
+    inp = provider(cutoff_for(min(today, EVENT_FINAL)))   # P2 rule 3: these tests never extend past the deadline
     events, clean = stat(inp)
+    events = [e for e in events if e[0] < EVENT_FINAL]
     if len(events) < 15:
         if today >= EVENT_FINAL:
-            return Result(hid, "inconclusive", str(EVENT_FINAL), len(events), note="fewer than 15 creation events",
-                          decided=EVENT_FINAL)
+            return deadline()
         return Result(hid, "pending", "after the 15th creation event", len(events), _event_stats(hid, events, clean),
                       note=f"{len(events)} of 15 events so far")
     review = nyse.next_session(events[14][0])
     if today < review:
         return Result(hid, "pending", str(review), len(events), note="15th event complete; review next session")
     while True:                                         # the review needs 15 events in the data captured by then
+        if review > EVENT_FINAL:
+            return deadline()
         inp = provider(cutoff_for(review))
         v = void_before(inp, review)
         if v:
@@ -690,6 +730,9 @@ def review_h5(today, provider):
     exs = [ex for ex, _ in inp.dividends if ex >= date(2026, 12, 1)]
     if not exs:
         return Result("H5", "pending", str(H5_FIRST_REVIEW), note="no December 2026 ex-date in the dividend file yet")
+    if exs[0] > date(2026, 12, 31):                     # the frozen first test is December's: never skip it (A15)
+        return Result("H5", "no data", str(H5_FIRST_REVIEW),
+                      note=f"the dividend file has no December 2026 ex-date (its first later one is {exs[0]})")
     for ex in exs:
         review = max(H5_FIRST_REVIEW, nyse.next_session(ex)) if ex == exs[0] else nyse.next_session(ex)
         if today < review:
@@ -710,16 +753,15 @@ def review_h5(today, provider):
 def review_h7(today, provider):
     if today <= XX_EXPIRY:
         return Result("H7", "pending", str(XX_EXPIRY))
-    # The expiry closes are read from the data captured in the week after the expiry (no void: index data only).
-    review = nyse.next_session(XX_EXPIRY)
-    used = max(review, min(today, review + timedelta(days=7)))
-    inp = provider(cutoff_for(used))
+    # One fixed cutoff, the end of the review date (P2 rule 2; external audit A05): the 2030-01-10 closes must be
+    # captured (or added to closes.csv) before 23:59:59 UTC that day. No void: H7 reads index closes only.
+    inp = provider(cutoff_for(XX_EXPIRY))
     spy, spx = inp.prices.get(XX_EXPIRY, (np.nan, np.nan))
     if np.isnan(spy) or np.isnan(spx):
-        return Result("H7", "pending", str(XX_EXPIRY), note="no reference closes for 2030-01-10 yet")
+        return Result("H7", "no data", str(XX_EXPIRY), note="no 2030-01-10 closes in the data captured by that date")
     trig = XX_STRIKE * spx / spy
     return Result("H7", "pass" if 9968 <= trig <= 10002 else "fail", str(XX_EXPIRY), 1, {"trigger": trig},
-                  decided=used)
+                  decided=XX_EXPIRY)
 
 
 def review_h7a(today, provider):
@@ -778,10 +820,15 @@ def recorded(entries):
     return {(e["id"], (e.get("evidence") or {}).get("checkpoint")) for e in entries if e.get("kind") == "verdict"}
 
 
-def to_record(results, entries, now_utc):
+INDEX_ONLY = {"H7", "H7a"}                     # read S&P 500 and SPY closes only, never the fund's holdings
+
+
+def to_record(results, entries, now_utc, problems=None):
     """(ready, waiting): final words not yet in the ledger. A word is ready only after the day whose captured data
     decided it has ended (its cutoff is in the past at `now_utc`, an ISO 'YYYY-MM-DDTHH:MM:SSZ' string); before
-    that, a later capture could still change it, so it waits."""
+    that, a later capture could still change it, so it waits. `problems(decided)` (optional) lists unexplained
+    accounting-identity failures in the data captured by that date: a fund-data word waits until they are explained
+    (reconcile.KNOWN_EXCEPTIONS) or the data are corrected (external audit A08)."""
     done, ready, waiting = recorded(entries), [], []
     for r in results:
         items = []
@@ -796,8 +843,14 @@ def to_record(results, entries, now_utc):
         for cp, word, decided in items:
             if (r.id, cp) in done:
                 continue
-            if decided is None or cutoff_for(decided) >= now_utc:
-                waiting.append((r, cp, word, decided))
+            if decided is None:
+                waiting.append((r, cp, word, decided, "no deciding date: not recordable"))
+            elif cutoff_for(decided) >= now_utc:
+                waiting.append((r, cp, word, decided, f"record after {decided} ends (UTC)"))
+            elif problems is not None and r.id not in INDEX_ONLY and problems(decided):
+                bad = problems(decided)
+                waiting.append((r, cp, word, decided, f"{len(bad)} unexplained accounting failure(s), first "
+                                                      f"{bad[0][0]} {bad[0][1]}: explain or correct them first"))
             else:
                 ready.append((r, cp, word))
     return ready, waiting
@@ -824,6 +877,8 @@ def load(root=None, cutoff=None, holdings="latest"):
         spots = marks.load_spots(root)
         curve_table, divs = curves.load_treasury(root), marks.load_dividends(root)
         model = marks.model_daily(state, curve_table, divs, spots, opts, skip_missing_spot=True)
+        voids = find_voids(state, root)                 # void notices too: the copy saved by the cutoff (A07)
+        problems = [] if state.empty else [(d, c) for d, c in reconcile.failures(state)[0] if d >= TEST_START]
         vix = {}
         recs = parse.saved_versions(root, "VIX1Y_History.csv")
         if recs:
@@ -842,7 +897,7 @@ def load(root=None, cutoff=None, holdings="latest"):
         return F, DF, tau
 
     return Inputs(state=state, model=model, prices=prices, vix1y=vix, dividends=divs, calls=calls,
-                  listed=listed_rows, listed_forward=listed_forward, voids=find_voids(state, root), cutoff=cutoff)
+                  listed=listed_rows, listed_forward=listed_forward, voids=voids, cutoff=cutoff, problems=problems)
 
 
 def price_rule(spots):
@@ -923,11 +978,15 @@ def find_voids(state, root=None, events_csv=None):
             if b["shares_outstanding"] <= 0.5 * a["shares_outstanding"] * (1 + 1e-9) and \
                     b["nav_published"] >= 1.8 * a["nav_published"]:
                 out.append((b["as_of"], "reverse split"))
-    path = events_csv or (root / "external" / "void_events.csv" if root is not None else None)
-    if path is not None and path.exists():
-        ev = pd.read_csv(path, dtype=str).fillna("")
+    from .forward import parse
+    if events_csv is not None:
+        text = events_csv.read_text(encoding="utf-8") if events_csv.exists() else None
+    else:
+        text = parse.external_text(root, "void_events.csv") if root is not None else None
+    if text is not None:
+        ev = pd.read_csv(io.StringIO(text), dtype=str).fillna("")
         if "source" not in ev.columns or (ev["source"].str.strip() == "").any():
-            raise ValueError(f"{path.name}: every void event needs a source (the filing or notice that announced it)")
+            raise ValueError("void_events.csv: every void event needs a source (the filing or notice that announced it)")
         out += [(date.fromisoformat(d.strip()), f"{e} ({src})") for d, e, src in zip(ev["date"], ev["event"],
                                                                                      ev["source"])]
     return sorted(out)
