@@ -261,3 +261,32 @@ rough. They ignore today's starting valuation; high valuations have been followe
 history study conditions on it (CAPE). Shiller's price is a monthly average, which smooths the windows a little.
 The simulator's odds rows run to a 24% mean total return (its median path is about history's top 10%), plus a custom
 row that flags inputs beyond history's top 5% and its best.
+
+**F14. A gaming GPU prices XX's option by Monte Carlo about 25 times faster than all 24 CPU threads, but only on
+big batches.** Measured 2026-10-17 (`scripts/b17a_gpu_first_test.py`; i7-13700K, numba 0.68 on 24 threads; NVIDIA
+RTX 3080 10 GB, CuPy 14.2 with CUDA 13.2). One lognormal end price per path; the README's 2026-10-13 example (exact
+Black-76 value 54.677436). Median of 3 runs up to 100 million paths, one run at 1 billion:
+
+| Engine | 10 thousand | 1 million | 100 million | 1 billion | Speed at the largest size |
+|---|---|---|---|---|---|
+| numpy, 1 core | 0.000 s | 0.025 s | 2.83 s | (not run) | 35 million paths/s |
+| numba, 24 threads | 0.000 s | 0.003 s | 0.203 s | 2.006 s | 498 million paths/s |
+| CuPy, 64-bit | 0.001 s | 0.002 s | 0.037 s | 0.340 s | 2.9 billion paths/s |
+| CuPy, 32-bit | 0.001 s | 0.001 s | 0.010 s | 0.080 s | 12.5 billion paths/s |
+
+All 19 estimates sat within 3 standard errors of the exact value (largest gap 1.73 SE). At 1 billion paths the
+standard error is 0.004 on a price of 54.68 (0.007%).
+
+What it teaches, for the v0.3 engine:
+- Small jobs belong on the CPU. At 10 thousand paths the GPU did 8 million paths/s against numpy's 85 million:
+  starting a GPU job and copying results back costs more than the work.
+- 64-bit math cost only about 4x here, not the 64x the card's arithmetic rate suggests: this job spends its time
+  moving random numbers through the card's memory, not on arithmetic. A kernel that makes its random numbers
+  inside (the planned counter-based Philox) avoids that traffic, so v0.3 targets are set on that design, and the
+  32-bit vs 64-bit gap must be measured again there.
+- Sums of millions of 32-bit numbers were accumulated in 64-bit; the 32-bit results agree with the exact value as
+  closely as the 64-bit ones.
+
+Caveats: one simple payoff and one machine; wall-clock times on a desktop that was also running other programs.
+The engines use different random streams (numpy PCG64, numba per-thread streams, cuRAND), so they agree only within
+Monte Carlo error, not path by path.
