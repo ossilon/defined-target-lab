@@ -2,4 +2,4 @@
 
 Project: defined-target-lab. MIT license; see LICENSE and CHANGELOG.md.
 """
-__version__ = "0.1.1"
+__version__ = "0.2.0"

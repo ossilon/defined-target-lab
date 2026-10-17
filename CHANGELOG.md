@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased (v0.2.0: browser simulator)
+## v0.2.0 (2026-10-17)
+
+The browser simulator: a no-install page that shows what one share of a defined-target call ETF is worth at any
+index level on any date up to its target date.
 
 ### Added
 - **Simulator model** (`definedtarget/sim.py`): value, leverage, one day's cost and odds for any fund made of option
