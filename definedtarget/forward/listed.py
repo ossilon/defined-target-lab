@@ -54,6 +54,40 @@ def close_for(read_utc):
     return close, in_window
 
 
+# Draft protocol P3 (NOT frozen; evidence gathered 2026-10-19 to 2026-10-30, BACKLOG B2): a quote counts only if its
+# market time (read time minus the feed's stated delay) falls between 16:00 and 16:15 New York time on its close date:
+# after the S&P 500 closes, while SPX options still trade. TradingView's OPRA feed reports update_mode
+# "delayed_streaming_900" (15 minutes); with it, readings between 16:15 and 16:30 show the quotes of 16:00-16:15.
+P3_START, P3_END = time(16, 0), time(16, 15)
+
+
+def feed_delay_seconds(reply_text):
+    """The option quotes' delay in seconds from a saved reply ('delayed_streaming_900' -> 900, 'streaming' -> 0), or
+    None if the reply did not include update_mode (readings before 2026-10-17). Every option row must agree."""
+    modes = {row.get("update_mode") for sym, row in json.loads(reply_text).get("data", {}).items()
+             if sym not in REFERENCE}
+    if not modes or None in modes:
+        return None
+    if len(modes) > 1:
+        raise ValueError(f"option rows report different feed modes: {sorted(modes)}")
+    mode = modes.pop()
+    if mode.startswith("delayed_streaming_"):
+        return int(mode.rsplit("_", 1)[1])
+    if mode in ("streaming", "realtime"):
+        return 0
+    raise ValueError(f"unknown feed mode: {mode}")
+
+
+def p3_market_time(read_utc, delay_seconds):
+    """(close date, market time in New York, inside the draft P3 window?) for a reading with a known feed delay."""
+    from datetime import timedelta
+    market = (read_utc - timedelta(seconds=delay_seconds)).astimezone(NEW_YORK)
+    day = market.date()
+    ok = calendar.is_session(day) and P3_START <= market.time() < P3_END
+    close = day if ok or (calendar.is_session(day) and market.time() >= P3_START) else calendar.previous_session(day)
+    return close, market, ok
+
+
 def parse(reply_text):
     """{symbol: (bid, ask) or (close, None) for references} plus the list of symbols TradingView did not return.
 

@@ -73,3 +73,31 @@ with tempfile.TemporaryDirectory() as tmp:
           (n, same, diffs))
     check("rows read outside the window are flagged, never mixed in",
           sorted(r["in_window"] for r in listed.load(tmp)) == ["False", "False", "True", "True"])
+
+# 5. Draft protocol P3 (not frozen): the feed's delay and each quote's market time.
+def reply_mode(mode):
+    data = {listed.option_symbol(10000): {"bid": 530.0, "ask": 590.0, "update_mode": mode},
+            "SP:SPX": {"close": 7800.0, "update_mode": "delayed_streaming_600"},
+            "AMEX:SPY": {"close": 777.0, "update_mode": "streaming"}}
+    return json.dumps({"success": True, "data": data})
+
+
+check("feed delay: 'delayed_streaming_900' is 15 minutes", listed.feed_delay_seconds(reply_mode("delayed_streaming_900")) == 900)
+check("feed delay: a live feed is 0", listed.feed_delay_seconds(reply_mode("streaming")) == 0)
+check("feed delay: readings saved without update_mode give None (not a guess)",
+      listed.feed_delay_seconds(json.dumps({"success": True, "data": {listed.option_symbol(10000): {"bid": 1, "ask": 2}}}))
+      is None)
+raises("feed delay: an unknown mode is refused", lambda: listed.feed_delay_seconds(reply_mode("weird")), "unknown feed mode")
+p3_cases = [
+    # read time (UTC), delay, expected close, inside draft P3?, why
+    (utc(2026, 10, 19, 20, 16), 900, date(2026, 10, 19), True, "Mon read 16:16 NY, 15-min delay: market 16:01"),
+    (utc(2026, 10, 19, 20, 28), 900, date(2026, 10, 19), True, "Mon read 16:28 NY: market 16:13"),
+    (utc(2026, 10, 19, 20, 31), 900, date(2026, 10, 19), False, "Mon read 16:31 NY: market 16:16, options closed"),
+    (utc(2026, 10, 19, 20, 14), 900, date(2026, 10, 16), False, "Mon read 16:14 NY: market 15:59, S&P not closed"),
+    (utc(2026, 10, 19, 20, 5), 0, date(2026, 10, 19), True, "live feed read 16:05 NY"),
+    (utc(2026, 11, 2, 21, 20), 900, date(2026, 11, 2), True, "after the clock change: read 16:20 EST, market 16:05"),
+    (utc(2026, 10, 17, 20, 20), 900, date(2026, 10, 16), False, "Saturday: no session"),
+]
+for read, delay, close, inside, why in p3_cases:
+    got_close, market, ok = listed.p3_market_time(read, delay)
+    check(f"draft P3: {why}", (got_close, ok) == (close, inside), (got_close, market.strftime("%a %H:%M"), ok))
