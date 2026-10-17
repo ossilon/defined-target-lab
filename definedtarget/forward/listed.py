@@ -92,7 +92,7 @@ def parse(reply_text):
     """{symbol: (bid, ask) or (close, None) for references} plus the list of symbols TradingView did not return.
 
     Refuses a reply that is not a successful TradingView batch reply. A call without a usable two-sided quote (bid or
-    ask missing, ask of zero, negative bid, or bid above ask) counts as missing for that strike: after the 16:15
+    ask missing, bid or ask of zero or below, or bid above ask) counts as missing for that strike: after the 16:15
     close many long-dated quotes turn one-sided (ask 0), so one bad strike must not throw away the others.
     """
     reply = json.loads(reply_text)
@@ -107,7 +107,7 @@ def parse(reply_text):
         if bid is None or ask is None:
             continue                                            # no quote today: counts as missing
         bid, ask = float(bid), float(ask)
-        if bid < 0 or ask <= 0 or bid > ask:
+        if bid <= 0 or ask <= 0 or bid > ask:
             continue                                            # one-sided or crossed: counts as missing
         quotes[sym] = (bid, ask)
     missing = [s for s in symbols() if s not in quotes]

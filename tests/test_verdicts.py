@@ -230,6 +230,7 @@ check("a cutoff counts the whole review day (UTC)", V.cutoff_for(date(2027, 1, 1
 # 11. Which listed readings count: P2's read window now; P3's market-time window once P3 is in the ledger.
 import json  # noqa: E402
 import tempfile  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
 from pathlib import Path  # noqa: E402
 
 from definedtarget import ledger  # noqa: E402
@@ -253,7 +254,8 @@ with tempfile.TemporaryDirectory() as tmp:
     p2 = V.counted_listed(Path(tmp), None, ledger_path=led)
     check("under P2 the reading inside 16:15-20:15 New York counts (17:40), the 16:20 one too; the first is used",
           list(p2["ask"]) == [591.0], p2)
-    ledger.append({"kind": "protocol", "id": "P3", "rules": ["synthetic"]}, path=led)
+    ledger.append({"kind": "protocol", "id": "P3", "rules": ["synthetic"]}, path=led,
+                  now=datetime(2026, 10, 30, tzinfo=timezone.utc))
     p3 = V.counted_listed(Path(tmp), None, ledger_path=led)
     check("under P3 only the reading whose market time is 16:00-16:15 counts (16:20 read, 15-min delay)",
           list(p3["ask"]) == [591.0], p3)
@@ -276,3 +278,210 @@ r = status("H9", AFTER, h9)
 check("H9 passes when XX's vol sits 0.3 points above the listed mid on each of 15 creation days", r.status == "pass" and
       r.n == 15, r.line())
 check("H7 is pending until 2030-01-10", status("H7", AFTER, base).status == "pending")
+
+# 13. Audit B10c fixes (2026-10-17): each check would have failed before the fix.
+import importlib.util  # noqa: E402
+
+from definedtarget import marks  # noqa: E402
+
+# B1: --record never writes from data that does not exist yet.
+spec = importlib.util.spec_from_file_location("verdicts_cli", Path(__file__).resolve().parents[1] / "scripts" / "verdicts.py")
+cli = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(cli)
+UTC = timezone.utc
+final = [V.Result("H8", "pass", "2027-01-14", 40, {"ratio": 1.3}, decided=date(2027, 1, 14))]
+ready, waiting = V.to_record(final, [], "2027-01-14T23:00:00Z")
+check("B1: a verdict waits while its deciding day (UTC) has not ended", not ready and len(waiting) == 1)
+ready, waiting = V.to_record(final, [], "2027-01-15T00:00:01Z")
+check("B1: the next day it is ready to record", len(ready) == 1 and not waiting)
+check("B1: a final word without a deciding date is never recordable",
+      not V.to_record([V.Result("H8", "pass", "x")], [], "2099-01-01T00:00:00Z")[0])
+with tempfile.TemporaryDirectory() as tmp:
+    led = Path(tmp) / "ledger.jsonl"
+    ledger.append({"kind": "hypothesis", "id": "H8", "claim": "c", "test": "t", "pass_if": "p",
+                   "review_on": "2027-01-14"}, path=led)
+
+    def boom(today):
+        raise AssertionError("results must not be computed for a future --as-of")
+    rc = cli.main(["--as-of", "2027-02-01", "--record", "due"], ledger_path=led,
+                  now=datetime(2027, 1, 15, 1, 0, tzinfo=UTC), results_fn=boom)
+    check("B1: --record with an --as-of after today is refused before anything is computed",
+          rc == 1 and len(ledger.read(led)) == 1)
+    rc = cli.main(["--record", "due"], ledger_path=led, now=datetime(2027, 1, 14, 23, 0, tzinfo=UTC),
+                  results_fn=lambda d: final)
+    check("B1: --record on the deciding day itself records nothing", rc == 1 and len(ledger.read(led)) == 1)
+    rc = cli.main(["--record", "due"], ledger_path=led, now=datetime(2027, 1, 15, 1, 0, tzinfo=UTC),
+                  results_fn=lambda d: final)
+    entries = ledger.read(led)
+    check("B1: the day after, it records once, with the data cutoff in the evidence",
+          rc == 0 and len(entries) == 2 and entries[-1]["evidence"]["data_cutoff"] == "2027-01-14T23:59:59Z")
+    rc = cli.main(["--record", "due"], ledger_path=led, now=datetime(2027, 1, 16, 1, 0, tzinfo=UTC),
+                  results_fn=lambda d: final)
+    check("B1: a recorded verdict is never recorded twice", rc == 1 and len(ledger.read(led)) == 2)
+    h7r = [V.Result("H7a", "pending", "x", stats={"2027": "pass", "2028": "pending"})]
+    ready, waiting = V.to_record(h7r, [], "2027-01-21T00:00:00Z")
+    check("B1: an H7a checkpoint is recordable after its own checkpoint day", [c[1] for c in ready] == ["2027"])
+
+# B2: H5 never skips its first ex-date because an input is missing.
+h5b = synth()
+h5b.dividends = h5.dividends + [(date(2027, 3, 19), 1.95)]
+h5b.calls = pd.DataFrame(rows)
+del h5b.prices[d0]
+r = status("H5", date(2026, 12, 22), h5b)
+check("B2: a missing reference close gives 'no data' for the December ex-date", r.status == "no data"
+      and "2026-12-18" in r.note and "reference close" in r.note, r.line())
+r = status("H5", date(2027, 3, 25), h5b)
+check("B2: ... and it does not move on to the March ex-date", r.status == "no data" and "2026-12-18" in r.note, r.line())
+h5c = synth()
+h5c.dividends = h5.dividends[:-1] + [(ex, float("nan"))]
+h5c.calls = pd.DataFrame(rows)
+r = status("H5", date(2026, 12, 22), h5c)
+check("B2: a December row without an amount gives 'no data', never a verdict", r.status == "no data"
+      and "dividend amount" in r.note, r.line())
+h5d = synth()
+h5d.dividends = h5.dividends + [(date(2027, 3, 19), 1.95)]
+h5d.calls = pd.DataFrame(rows[:2])                       # one contract only: fewer than 3 -> next ex-date
+r = status("H5", date(2026, 12, 22), h5d)
+check("B2: fewer than 3 contracts (inputs present) still moves to the next ex-date", r.status == "pending"
+      and "2027-03-19" in r.note, r.line())
+
+# B3: P2's price rule admits issuer and user-supplied closes, never TradingView closes.
+with tempfile.TemporaryDirectory() as tmp:
+    ext = Path(tmp) / "external"
+    ext.mkdir()
+    (ext / "tv_closes.csv").write_text("date,symbol,close\n2026-11-02,AMEX:SPY,700\n2026-11-02,SP:SPX,7020\n",
+                                       encoding="utf-8")
+    (ext / "closes.csv").write_text("date,symbol,close\n2026-11-03,SPY,701\n2026-11-03,SPX,7031\n", encoding="utf-8")
+    spots = marks.load_spots(Path(tmp))
+    kept = V.price_rule(spots)
+    check("B3: a TradingView close (tv_closes.csv) counts as missing under P2", date(2026, 11, 2) not in kept, spots)
+    check("B3: a user-supplied close (closes.csv) counts", kept.get(date(2026, 11, 3)) == (701.0, 7031.0), kept)
+
+# S1: H19 skips a close whose 9,600 quote is missing for a day; it falls back only when the strike lapses.
+s1 = synth()
+extra = []
+for d, g in s1.listed.groupby("close_date"):
+    m = 50 + (0.29 + 0.20) * 600 * 0.86                  # a 9,800 call that would put the gap at +20 points
+    extra.append({"close_date": d, "strike": 9800, "bid": m, "ask": m})
+s1.listed = pd.concat([s1.listed, pd.DataFrame(extra)], ignore_index=True)
+closes = sorted(s1.listed["close_date"].unique())
+gap_days = set(closes[::3])
+s1.listed = s1.listed[~((s1.listed["strike"] == 9600) & s1.listed["close_date"].isin(gap_days))]
+r = status("H19", AFTER, s1)
+check("S1: a one-day gap at 9,600 is a missing close, not a switch to 9,800", r.status == "pass"
+      and r.stats["missing_closes"] > 0, r.line())
+s1b = synth()
+s1b.listed = pd.concat([s1b.listed, pd.DataFrame(extra)], ignore_index=True)
+s1b.listed = s1b.listed[~((s1b.listed["strike"] == 9600) & (s1b.listed["close_date"] >= date(2027, 3, 1)))]
+n_before = status("H19", AFTER, s1b).n
+r = status("H19", date(2027, 4, 14), s1b)
+check("S1: a lapsed 9,600 strike moves to the nearest quoted strike below (missing only the newest close)",
+      r.stats.get("missing_closes") == 1, r.line())
+
+# S2: a zero bid or an unsolvable quote is a missing close, not a miss.
+s2 = synth(gap_listed=0.3)
+ten = s2.listed[s2.listed["strike"] == 10000].index[:10]
+s2.listed.loc[ten, "bid"] = 0.0
+r = status("H13", AFTER, s2)
+check("S2: ten zero bids count as missing closes (share unchanged, n down by 10)",
+      r.status == "pass" and r.stats["unusable_quotes"] == 10 and r.stats["share_in_band"] == 1.0, r.line())
+check("S2: the capture's parser drops a zero bid as one-sided",
+      L.parse(json.dumps({"success": True, "data": {L.option_symbol(10000): {"bid": 0, "ask": 5.0}}}))[0] == {})
+
+# S3: the extension's last allowed close completes the sample; a void during the extension is caught.
+s3 = synth()
+keep = set(DAYS[:40]) | {date(2027, 4, 14)}               # 39 changes in the window, the 40th ends 2027-04-14
+s3.state = s3.state[s3.state["as_of"].isin(keep)]
+s3.model = s3.model[s3.model["as_of"].isin(keep)]
+s3.prices = {d: v for d, v in s3.prices.items() if d in keep}
+r = status("H8", date(2027, 4, 20), s3)
+check("S3: a sample completed by the last allowed close gets a verdict the next session",
+      r.status in ("pass", "fail") and r.review.startswith("2027-04-15") and r.n == 40, r.line())
+sv = synth(last=date(2026, 11, 25))
+sv.voids = [(date(2027, 3, 1), "liquidation notice")]
+r = status("H8", date(2027, 6, 1), sv)
+check("S3: a void during the extension gives 'void', not 'inconclusive'", r.status == "void", r.line())
+
+# S4: H1 waits until the 15th event is in the data captured by the review; no crash without clean days.
+late_inp = synth(creations=cre, creation_jump=0.3, seed=3, iv_spy=0.0, iv_vix=0.0)
+ev15 = V.h1_stat(late_inp)[0][14][0]
+
+
+def provider_late(inp, late_day, lag=7):
+    base_p = provider_of(inp)
+
+    def provider(cutoff):
+        got = base_p(cutoff)
+        d = date.fromisoformat(cutoff[:10])
+        if d <= late_day + timedelta(days=lag):          # a capture outage: closes from the 15th event's arrive
+            got.state = got.state[got.state["as_of"] < late_day]   # a week late
+            got.model = got.model[got.model["as_of"] < late_day]
+        return got
+    return provider
+
+
+r = [x for x in V.all_results(AFTER, provider_late(late_inp, ev15)) if x.id == "H1"][0]
+check("S4: a late capture moves H1's review until the data hold 15 events (never n = 14)",
+      r.n == 15 and date.fromisoformat(r.review) > ev15 + timedelta(days=7), r.line())
+busy = synth(creations=set(DAYS[1:31:2]), seed=3)
+r = status("H1", AFTER, busy)
+check("S4: no clean comparison days gives 'no data', not a crash or a verdict", r.status == "no data", r.line())
+
+# S5: H2 lets contracts per share recover on the day after a creation (bought T+1).
+c_day = DAYS[30]
+s5 = synth(creations={c_day}, cps_sales=sales)
+i = s5.state.index[s5.state["as_of"] == c_day][0]
+s5.state.loc[i, "contracts"] = s5.state.loc[i - 1, "contracts"]
+s5.state.loc[i, "contracts_per_share"] = s5.state.loc[i, "contracts"] / s5.state.loc[i, "shares_outstanding"]
+n, ok, st = V.t_h2(s5, AFTER)
+check("S5: a rise on the day after a flow day is not an unexplained rise", st["unexplained_rises"] == 0, st)
+
+# S6: void detection.
+st6 = synth().state.copy()
+j = st6.index[st6["as_of"] == date(2027, 2, 1)][0]
+st6.loc[j:, "shares_outstanding"] = st6.loc[j:, "shares_outstanding"] / 2
+st6.loc[j:, "nav_published"] = st6.loc[j:, "nav_published"] * 2
+check("S6: an exact 1-for-2 reverse split is found", (date(2027, 2, 1), "reverse split") in V.find_voids(st6))
+st7 = synth().state.copy()
+st7["strike"] = st7["strike"].astype(float)
+st7.loc[j, "strike"] = float("nan")                      # one close with two option lines
+check("S6: a one-day two-line glitch is not a roll", V.find_voids(st7) == [])
+st7.loc[j:, "strike"] = 1100.0
+check("S6: a new option line on two consecutive closes is a roll",
+      V.find_voids(st7) == [(date(2027, 2, 1), "option line changed to 1100.0 2030-01-10")], V.find_voids(st7))
+with tempfile.TemporaryDirectory() as tmp:
+    p = Path(tmp) / "void_events.csv"
+    p.write_text("date,event\n2027-03-01,liquidation\n", encoding="utf-8")
+    try:
+        V.find_voids(None, events_csv=p)
+        refused = False
+    except ValueError:
+        refused = True
+    check("S6: a hand-listed void event without a source is refused", refused)
+    p.write_text("date,event,source\n2027-03-01,liquidation,497 filing 2027-02-27\n", encoding="utf-8")
+    check("S6: with a source it counts, naming the source",
+          V.find_voids(None, events_csv=p) == [(date(2027, 3, 1), "liquidation (497 filing 2027-02-27)")])
+
+# S7: fund events do not void the index-only ratio hypotheses.
+h7.voids = [(date(2026, 12, 1), "option line changed")]
+check("S7: H7a ignores fund void events (index closes only)", status("H7a", date(2027, 2, 1), h7).stats.get("2027")
+      == "pass")
+
+# C7: P3 applies only to readings taken after its ledger entry was recorded.
+with tempfile.TemporaryDirectory() as tmp:
+    raw = Path(tmp) / "raw" / "tradingview_chain" / "2026-11-02"
+    raw.mkdir(parents=True)
+    (raw / "20261102T212000Z.json").write_text(reply("delayed_streaming_900", ask=591.0), encoding="utf-8")
+    (raw / "20261102T212900Z.json").write_text(reply("delayed_streaming_900", ask=594.0), encoding="utf-8")
+    led = Path(tmp) / "ledger.jsonl"
+    ledger.append({"kind": "protocol", "id": "P3", "rules": ["synthetic"]}, path=led,
+                  now=datetime(2026, 11, 2, 21, 40, tzinfo=UTC))
+    got = V.counted_listed(Path(tmp), None, ledger_path=led)
+    check("C7: readings before P3 was recorded follow P2 (first in window)", list(got["ask"]) == [591.0], got)
+
+# C10: one crashing hypothesis shows 'error' and leaves the others.
+bad = synth()
+bad.voids = None                                          # breaks every void check, but nothing else
+res = V.all_results(AFTER, provider_of(bad))
+check("C10: a crash in one review shows as 'error' for that hypothesis only",
+      any(x.status == "error" for x in res) and any(x.status != "error" for x in res))

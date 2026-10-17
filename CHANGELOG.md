@@ -16,6 +16,29 @@
 
 ### Changed
 - VIX1Y (used by H4, H11, H18) is downloaded on every run instead of weekly.
+- The listed-quote parser drops a zero bid as one-sided (it already dropped a zero ask).
+
+### Fixed (independent audit B10c, before release)
+- `--record` refuses an `--as-of` date after today, and records a verdict only after the day whose captured data
+  decided it has ended (UTC). Each recorded verdict now names its data cutoff.
+- H5 shows "no data" when an input is missing (dividend amount, reference close, holdings file). It never moves on
+  to a later ex-date for that reason; only "fewer than 3 contracts" does.
+- P2's price rule: TradingView closes (`tv_closes.csv`) no longer pass the source filter.
+- H19 treats a one-day gap in the 9,600 or 10,400 quote as a missing close. It switches strikes only when a strike
+  has lapsed.
+- A zero bid, or a quote whose implied vol does not solve inside the solver's limits, counts as a missing close
+  (H9, H13, H17); the stats report how many.
+- Minimum-sample extension: a close on the last allowed day can complete the sample (verdict the next session), and
+  a void event during the extension gives "void".
+- H1 and H9 review only once the data captured by the review date hold 15 events. Fewer than 2 clean days, or a
+  p-value that cannot be computed, gives "no data" instead of a crash or a verdict.
+- H2 checks for rises on clean days only, as the frozen text says (the day after a creation may restore contracts).
+- Void detection finds an exact 1-for-2 reverse split, ignores a one-day file glitch (a roll needs the new option
+  line on two consecutive closes), and requires a source for every hand-listed event. Fund events no longer void
+  H7a, which reads index closes only, as H7 does.
+- P3 (when frozen) applies only to readings taken after its ledger entry. A crash in one review shows "error" for
+  that hypothesis only.
+- The conventions the frozen text leaves implicit are written in the module header.
 
 ## v0.2.1 (2026-10-17)
 

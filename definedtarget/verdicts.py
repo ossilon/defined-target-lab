@@ -15,9 +15,27 @@ Plain words
   * "daily change" = between consecutive closes that both have every value the test needs (P1: drop missing closes,
     never fill them);
   * an extended review (P1 minimum-sample rule) moves to the session after the close that completes the sample, so
-    the window includes that close, and reads the data captured by then;
-  * under P2 several in-window readings of one close may exist: the first counts (nearest the close).
-- scripts/verdicts.py prints every status and, only when asked, appends a verdict to the ledger.
+    the window includes that close, and reads the data captured by then. "At most three months later" bounds the
+    completing close: it must fall on or before the last session on or before review + 3 months. The final review
+    is the session after that last close; if the sample is still short there, the verdict is inconclusive;
+  * H1 and H9 review on the session after the 15th event, and only once the data captured by that session holds 15
+    events (a late capture moves the review to the next session);
+  * under P2 several in-window readings of one close may exist: the first counts (nearest the close). Under P3 the
+    latest qualifying reading counts; P3 applies to readings taken after its ledger entry was recorded;
+  * a listed quote counts only if it is two-sided (bid > 0, ask >= bid) and its implied vol solves inside the
+    solver's limits; otherwise that close counts as missing for the test (P1), and the stats report how many;
+  * H19 uses the 9,600 and 10,400 calls; it moves to the nearest quoted strikes below and above 10,000 only when a
+    strike has lapsed (absent from that close and every later one, with at least one later close to show it); any
+    other gap is a missing close;
+  * H2: contracts per share may not rise on clean days; on flow days a rise must stay within one contract per
+    creation unit (rounding); other days (the day after a flow day, ex-dates) are unconstrained, as the text says;
+  * H1's "day after" is the next close with an implied vol (normally the next session); H14's "10th session" is
+    the session 10 sessions after the window's start; H17's n counts closes (the regression uses n - 1 changes);
+  * void events: "affected" means the hypothesis reads fund data (NAV, holdings, marks, market price). H7 and H7a
+    read only S&P 500 and SPY closes, which no fund event changes, so no fund event voids them;
+  * a daily change that spans a missing close is clean if its end close is clean (the plain reading above).
+- scripts/verdicts.py prints every status and, only when asked, appends a verdict to the ledger: never before the
+  day whose captured data decided it has ended (UTC).
 """
 import calendar as _cal
 import io
@@ -88,6 +106,7 @@ class Result:
     stats: dict = field(default_factory=dict)
     window: str = ""
     note: str = ""
+    decided: date = None                   # the day whose captured data decided a final word (its cutoff, P2)
 
     def line(self):
         s = ", ".join(f"{k} {_fmt(v)}" for k, v in self.stats.items())
@@ -193,10 +212,10 @@ def t_h2(inp, end):
         r, p = full.iloc[i], full.iloc[i - 1]
         if not (TEST_START <= r["as_of"] < end):
             continue
-        if not r["flow"]:
+        if r["clean"]:
             if r["cps"] > p["cps"] + 1e-12:
                 rises.append(str(r["as_of"]))
-        else:
+        elif r["flow"]:
             expected = p["cps"] * r["shares"]
             units = max(1.0, math.ceil(abs(r["shares"] - p["shares"]) / CREATION_UNIT))
             if r["contracts"] > expected + units + 1e-9:
@@ -344,8 +363,17 @@ def t_h16(inp, end):
 
 # ---- listed-market tests (H9, H13, H17, H19)
 
+def two_sided(bid, ask):
+    """A usable listed quote (P1: a close without one counts as missing): bid > 0 and ask >= bid."""
+    return np.isfinite(bid) and np.isfinite(ask) and bid > 0 and ask >= bid
+
+
 def listed_vols(inp, strikes=(10000,)):
-    """{close: {strike: (bid_iv, mid_iv, ask_iv) in points}} for counted listed readings, P1/P2 conventions."""
+    """{close: (ivs, quotes, DF, bad)} for counted listed readings, P1/P2 conventions.
+
+    ivs: {strike: (bid_iv, mid_iv, ask_iv) in points} for the strikes asked for, only when the quote is two-sided and
+    all three vols solve strictly inside the solver's limits; quotes: {strike: (bid, ask)}, two-sided quotes only;
+    bad: the asked-for strikes whose quote was present but unusable (they count as missing for that close)."""
     from . import pricing
     out = {}
     if inp.listed is None or inp.listed.empty or inp.listed_forward is None:
@@ -356,14 +384,27 @@ def listed_vols(inp, strikes=(10000,)):
         spy, spx = inp.prices[close]
         ratio = spx / spy
         F, DF, tau = inp.listed_forward(close)
-        q = {int(r.strike): (float(r.bid), float(r.ask)) for r in g.itertuples()}
-        row = {}
+        raw = {int(r.strike): (float(r.bid), float(r.ask)) for r in g.itertuples()}
+        q = {k: v for k, v in raw.items() if two_sided(*v)}
+        row, bad = {}, set()
         for k in strikes:
-            if k in q:
-                b, a = q[k]
-                row[k] = tuple(pricing.implied_vol(x / ratio, F, k / ratio, DF, tau) * 100 for x in (b, (b + a) / 2, a))
-        out[close] = (row, q, DF)
+            if k not in raw:
+                continue
+            if k not in q:
+                bad.add(k)
+                continue
+            b, a = q[k]
+            ivs = [pricing.implied_vol(x / ratio, F, k / ratio, DF, tau) for x in (b, (b + a) / 2, a)]
+            if all(np.isfinite(s) and pricing.VOL_LO * 10 < s < pricing.VOL_HI * 0.99 for s in ivs):
+                row[k] = tuple(s * 100 for s in ivs)
+            else:
+                bad.add(k)
+        out[close] = (row, q, DF, bad)
     return out
+
+
+def _unusable(lv, start, end, strike=10000):
+    return sum(1 for d, v in lv.items() if start <= d < end and strike in v[3])
 
 
 def t_h13(inp, end):
@@ -375,7 +416,7 @@ def t_h13(inp, end):
         return 0, None, {}
     ok = [f.loc[d, "iv_pts"] >= b - 0.5 and f.loc[d, "iv_pts"] <= m for d, (b, m, a) in rows]
     share = float(np.mean(ok))
-    return len(rows), share >= 0.80, {"share_in_band": share}
+    return len(rows), share >= 0.80, {"share_in_band": share, "unusable_quotes": _unusable(lv, LISTED_START, end)}
 
 
 def t_h17(inp, end):
@@ -388,8 +429,8 @@ def t_h17(inp, end):
     y = [lv[b][0][10000][1] - lv[a][0][10000][1] for a, b in zip(days, days[1:])]
     x = [pct(f.loc[b, "spx"], f.loc[a, "spx"]) for a, b in zip(days, days[1:])]
     coef, se = ols(y, [x])
-    stats = {"listed_coef": coef[1]}
-    xx = [(f.loc[b, "iv_pts"] - f.loc[a, "iv_pts"], pct(f.loc[b, "spy"], f.loc[a, "spy"]),
+    stats = {"listed_coef": coef[1], "unusable_quotes": _unusable(lv, LISTED_START, end)}
+    xx =[(f.loc[b, "iv_pts"] - f.loc[a, "iv_pts"], pct(f.loc[b, "spy"], f.loc[a, "spy"]),
            f.loc[b, "vix1y"] - f.loc[a, "vix1y"]) for a, b in zip(days, days[1:])]
     xx = [r for r in xx if not any(np.isnan(r))]
     if len(xx) >= 4:
@@ -401,15 +442,30 @@ def t_h17(inp, end):
 def t_h19(inp, end):
     f = frame(inp).set_index("as_of")
     lv = listed_vols(inp, strikes=())
-    gaps = []
-    for d, (row, q, DF) in lv.items():
+    quoted_after = {}                                  # strike -> last close with a usable quote
+    for d, v in lv.items():
+        for k in v[1]:
+            quoted_after[k] = max(quoted_after.get(k, d), d)
+
+    newest = max(lv) if lv else None
+
+    def pick(k, q, d, fallback):
+        if k in q:
+            return k
+        if quoted_after.get(k, date.min) > d or d == newest:   # quoted again later, or no later close to tell:
+            return None                                          # a gap, not a lapse -> missing close
+        return fallback
+
+    gaps, missing = [], 0
+    for d, (row, q, DF, bad) in lv.items():
         if not (LISTED_START <= d < end) or d not in f.index or np.isnan(f.loc[d, "prob"]):
             continue
         below = [k for k in q if k < 10000]
         above = [k for k in q if k > 10000]
-        k1 = 9600 if 9600 in q else (max(below) if below else None)
-        k2 = 10400 if 10400 in q else (min(above) if above else None)
+        k1 = pick(9600, q, d, max(below) if below else None)
+        k2 = pick(10400, q, d, min(above) if above else None)
         if k1 is None or k2 is None:
+            missing += 1
             continue
         mid = {k: sum(q[k]) / 2 for k in (k1, k2)}
         p = (mid[k1] - mid[k2]) / ((k2 - k1) * DF)
@@ -417,7 +473,8 @@ def t_h19(inp, end):
     if not gaps:
         return 0, None, {}
     share = _share_in(gaps, 5, 15)
-    return len(gaps), share >= 0.80, {"share_in_band": share, "median_gap_pts": float(np.median(gaps))}
+    return len(gaps), share >= 0.80, {"share_in_band": share, "median_gap_pts": float(np.median(gaps)),
+                                      "missing_closes": missing}
 
 
 # ---- event-based (H1, H9), H5, H7, H7a
@@ -453,20 +510,29 @@ def h9_stat(inp):
 
 
 def h5_compute(inp, ex):
-    """(n contracts, median ratio) for the two sessions ending on SPY ex-date `ex`."""
+    """(n contracts, median ratio, reason) for the two sessions ending on SPY ex-date `ex`. `reason` names a missing
+    input (the dividend amount, a reference close, a holdings file); it is None when the inputs exist, and then n
+    may still be below 3 (too few deep in-the-money calls held across both closes)."""
     d0 = nyse.previous_session(nyse.previous_session(ex))
     amount = dict(inp.dividends).get(ex)
-    if amount is None or inp.calls is None or d0 not in inp.prices or ex not in inp.prices:
-        return 0, float("nan")
+    if amount is None or not np.isfinite(amount):
+        return 0, float("nan"), f"no dividend amount for {ex}"
+    for d in (d0, ex):
+        if d not in inp.prices or not np.isfinite(inp.prices[d][0]):
+            return 0, float("nan"), f"no SPY reference close for {d}"
+        if d not in set(inp.state["as_of"]):
+            return 0, float("nan"), f"no holdings file for {d}"
+    if inp.calls is None:
+        return 0, float("nan"), None
     s0, s1 = inp.prices[d0][0], inp.prices[ex][0]
     c = inp.calls
     a = c[c["as_of"] == d0].groupby(["strike", "expiry"])["price"].first()
     b = c[c["as_of"] == ex].groupby(["strike", "expiry"])["price"].first()
     both = a.index.intersection(b.index)
-    if len(both) == 0 or np.isnan(s0) or np.isnan(s1):
-        return 0, float("nan")
+    if len(both) == 0:
+        return 0, float("nan"), None
     ratios = [((b[k] - a[k]) - (s1 - s0)) / amount for k in both]
-    return len(both), float(np.median(ratios))
+    return len(both), float(np.median(ratios)), None
 
 
 def h7a_ratio(inp, year):
@@ -512,17 +578,19 @@ def review_window_test(hid, today, provider):
     inp = provider(cutoff_for(review))
     v = void_before(inp, review)
     if v:
-        return Result(hid, "void", rv, note=f"{v[1]} on {v[0]}")
+        return Result(hid, "void", rv, note=f"{v[1]} on {v[0]}", decided=review)
     n, ok, stats = test(inp, review)
     need = MIN_SAMPLE.get(hid)
     if need is None or n >= need:
         if ok is None:
             return Result(hid, "no data", rv, n, stats, note="nothing to compute in the window")
-        return Result(hid, "pass" if ok else "fail", rv, n, stats, f"to {review}")
+        return Result(hid, "pass" if ok else "fail", rv, n, stats, f"to {review}", decided=review)
     last = add_months(review, 3)
-    probe = provider(cutoff_for(min(today, last)))      # find the completing close cheaply on the latest data ...
+    last_close = last if nyse.is_session(last) else nyse.previous_session(last)   # latest completing close allowed
+    final = nyse.next_session(last_close)                                          # the extension's last review
+    probe = provider(cutoff_for(min(today, final)))     # find the completing close cheaply on the latest data ...
     for d in sorted(set(frame(probe)["as_of"])):
-        if d < review or d > last:
+        if d < review or d > last_close:
             continue
         new_review = nyse.next_session(d)
         if new_review > today:
@@ -534,45 +602,66 @@ def review_window_test(hid, today, provider):
         if n2 >= need:
             v = void_before(inp2, new_review)
             if v:
-                return Result(hid, "void", new_review.isoformat(), note=f"{v[1]} on {v[0]}")
-            return Result(hid, "pass" if ok2 else "fail", f"{new_review} (extended)", n2, stats2, f"to {new_review}")
-    if today >= last:
-        inp3 = provider(cutoff_for(last))
-        n3, _, stats3 = test(inp3, last)
-        return Result(hid, "inconclusive", f"{last} (extended)", n3, stats3, note=f"fewer than {need} by {last}")
-    return Result(hid, "pending", f"{rv} (extending)", n, stats, note=f"{n} of {need} so far; extension to {last}")
+                return Result(hid, "void", new_review.isoformat(), note=f"{v[1]} on {v[0]}", decided=new_review)
+            return Result(hid, "pass" if ok2 else "fail", f"{new_review} (extended)", n2, stats2, f"to {new_review}",
+                          decided=new_review)
+    if today >= final:
+        inp3 = provider(cutoff_for(final))
+        v = void_before(inp3, final)
+        if v:
+            return Result(hid, "void", final.isoformat(), note=f"{v[1]} on {v[0]}", decided=final)
+        n3, ok3, stats3 = test(inp3, final)
+        if n3 >= need and ok3 is not None:              # the completing close arrived late but by the final review
+            return Result(hid, "pass" if ok3 else "fail", f"{final} (extended)", n3, stats3, f"to {final}",
+                          decided=final)
+        return Result(hid, "inconclusive", f"{final} (extended)", n3, stats3, note=f"fewer than {need} by {last_close}",
+                      decided=final)
+    return Result(hid, "pending", f"{rv} (extending)", n, stats,
+                  note=f"{n} of {need} so far; extension to the close of {last_close}")
 
 
 def review_events(hid, today, provider, provider_first=None):
     """H1 and H9: review after the 15th creation event, else 'inconclusive' on 2027-10-14. For H1, P2 also asks for
     the same statistic from the first saved version of each holdings file (`provider_first`); it informs, the latest
     version decides."""
+    stat = h1_stat if hid == "H1" else h9_stat
     inp = provider(cutoff_for(today))
-    events, clean = (h1_stat if hid == "H1" else h9_stat)(inp)
+    events, clean = stat(inp)
     if len(events) < 15:
         if today >= EVENT_FINAL:
-            return Result(hid, "inconclusive", str(EVENT_FINAL), len(events), note="fewer than 15 creation events")
+            return Result(hid, "inconclusive", str(EVENT_FINAL), len(events), note="fewer than 15 creation events",
+                          decided=EVENT_FINAL)
         return Result(hid, "pending", "after the 15th creation event", len(events), _event_stats(hid, events, clean),
                       note=f"{len(events)} of 15 events so far")
-    fifteenth = events[14][0]
-    review = nyse.next_session(fifteenth)
+    review = nyse.next_session(events[14][0])
     if today < review:
         return Result(hid, "pending", str(review), len(events), note="15th event complete; review next session")
-    inp = provider(cutoff_for(review))
-    v = void_before(inp, review)
-    if v:
-        return Result(hid, "void", str(review), note=f"{v[1]} on {v[0]}")
-    events, clean = (h1_stat if hid == "H1" else h9_stat)(inp)
-    events = [e for e in events if e[0] <= fifteenth]
+    while True:                                         # the review needs 15 events in the data captured by then
+        inp = provider(cutoff_for(review))
+        v = void_before(inp, review)
+        if v:
+            return Result(hid, "void", str(review), note=f"{v[1]} on {v[0]}", decided=review)
+        events = [e for e in stat(inp)[0] if e[0] < review]
+        if len(events) >= 15:
+            break
+        review = nyse.next_session(review)
+        if review > today:
+            return Result(hid, "pending", str(review), len(events),
+                          note="15th event not yet in the data captured by the review; review moves to the next session")
+    events = events[:15]
+    fifteenth = events[14][0]
     clean = clean_until(inp, hid, fifteenth)
     stats = _event_stats(hid, events, clean)
+    if not stats or len(clean) < 2 or not np.isfinite(stats["p_value"]):
+        return Result(hid, "no data", str(review), len(events), stats, note="fewer than 2 clean comparison days")
     ok = (stats["difference"] < -0.10 and stats["p_value"] < 0.05) if hid == "H1" else \
          (stats["difference"] > 0.10 and stats["p_value"] < 0.05)
     if hid == "H1" and provider_first is not None:
-        ev1, cl1 = h1_stat(provider_first(cutoff_for(review)))
-        first = _event_stats(hid, [e for e in ev1 if e[0] <= fifteenth], cl1)
+        inp1 = provider_first(cutoff_for(review))
+        ev1 = h1_stat(inp1)[0]
+        first = _event_stats(hid, [e for e in ev1 if e[0] <= fifteenth], clean_until(inp1, hid, fifteenth))
         stats.update({f"first_version_{k}": v for k, v in first.items() if k != "clean_n"})
-    return Result(hid, "pass" if ok else "fail", str(review), len(events), stats)
+    return Result(hid, "pass" if ok else "fail", str(review), len(events), stats, decided=review)
 
 
 def clean_until(inp, hid, last_day):
@@ -608,36 +697,38 @@ def review_h5(today, provider):
         inp = provider(cutoff_for(review))
         v = void_before(inp, review)
         if v:
-            return Result("H5", "void", str(review), note=f"{v[1]} on {v[0]}")
-        n, med = h5_compute(inp, ex)
+            return Result("H5", "void", str(review), note=f"{v[1]} on {v[0]}", decided=review)
+        n, med, why = h5_compute(inp, ex)
+        if why:                                         # missing input: never final, never moves to the next ex-date
+            return Result("H5", "no data", str(review), note=f"ex-date {ex}: {why} in the data captured by {review}")
         if n >= 3:
             return Result("H5", "pass" if 0.6 <= med <= 1.4 else "fail", str(review), n, {"median_ratio": med},
-                          f"ex-date {ex}")
+                          f"ex-date {ex}", decided=review)
     return Result("H5", "pending", "next SPY ex-date", note="fewer than 3 deep in-the-money calls so far")
 
 
 def review_h7(today, provider):
     if today <= XX_EXPIRY:
         return Result("H7", "pending", str(XX_EXPIRY))
+    # The expiry closes are read from the data captured in the week after the expiry (no void: index data only).
     review = nyse.next_session(XX_EXPIRY)
-    inp = provider(cutoff_for(max(review, min(today, review + timedelta(days=7)))))
+    used = max(review, min(today, review + timedelta(days=7)))
+    inp = provider(cutoff_for(used))
     spy, spx = inp.prices.get(XX_EXPIRY, (np.nan, np.nan))
     if np.isnan(spy) or np.isnan(spx):
         return Result("H7", "pending", str(XX_EXPIRY), note="no reference closes for 2030-01-10 yet")
     trig = XX_STRIKE * spx / spy
-    return Result("H7", "pass" if 9968 <= trig <= 10002 else "fail", str(XX_EXPIRY), 1, {"trigger": trig})
+    return Result("H7", "pass" if 9968 <= trig <= 10002 else "fail", str(XX_EXPIRY), 1, {"trigger": trig},
+                  decided=used)
 
 
 def review_h7a(today, provider):
-    checks, prev = [], H7A_BASELINE
+    checks, prev = [], H7A_BASELINE                    # no void: H7a reads index closes only (header)
     for year, review in H7A_CHECKPOINTS.items():
         if today < review:
             checks.append((year, None))
             break
         inp = provider(cutoff_for(review))
-        v = void_before(inp, review)
-        if v:
-            return Result("H7a", "void", str(review), note=f"{v[1]} on {v[0]}")
         r, n, _ = h7a_ratio(inp, year)
         if n == 0:
             checks.append((year, "no data"))
@@ -651,23 +742,65 @@ def review_h7a(today, provider):
     if None in words:
         return Result("H7a", "pending", "2027-01-20, 2028-01-20, 2029-01-19", stats=stats)
     overall = "fail" if "fail" in words else "pass" if all(w == "pass" for w in words) else "inconclusive"
-    return Result("H7a", overall, "2029-01-19", len(words), stats)
+    return Result("H7a", overall, "2029-01-19", len(words), stats, decided=H7A_CHECKPOINTS[2029])
+
+
+def one_result(hid, today, provider, provider_first=None):
+    if hid in WINDOW_TESTS:
+        return review_window_test(hid, today, provider)
+    if hid in ("H1", "H9"):
+        return review_events(hid, today, provider, provider_first)
+    if hid == "H5":
+        return review_h5(today, provider)
+    if hid == "H7":
+        return review_h7(today, provider)
+    return review_h7a(today, provider)
 
 
 def all_results(today, provider, provider_first=None):
+    """Every hypothesis's status. A crash in one (bad data) shows as 'error' for that one only; never final."""
     out = []
     for hid in ORDER:
-        if hid in WINDOW_TESTS:
-            out.append(review_window_test(hid, today, provider))
-        elif hid in ("H1", "H9"):
-            out.append(review_events(hid, today, provider, provider_first))
-        elif hid == "H5":
-            out.append(review_h5(today, provider))
-        elif hid == "H7":
-            out.append(review_h7(today, provider))
-        elif hid == "H7a":
-            out.append(review_h7a(today, provider))
+        try:
+            out.append(one_result(hid, today, provider, provider_first))
+        except Exception as e:                          # noqa: BLE001 - one bad input must not hide the others
+            out.append(Result(hid, "error", "-", note=f"{type(e).__name__}: {e}"))
     return out
+
+
+# ---------------------------------------------------------------- recording (scripts/verdicts.py --record)
+
+FINAL = {"pass", "fail", "inconclusive", "void"}
+
+
+def recorded(entries):
+    """{(id, checkpoint or None)} already in the ledger."""
+    return {(e["id"], (e.get("evidence") or {}).get("checkpoint")) for e in entries if e.get("kind") == "verdict"}
+
+
+def to_record(results, entries, now_utc):
+    """(ready, waiting): final words not yet in the ledger. A word is ready only after the day whose captured data
+    decided it has ended (its cutoff is in the past at `now_utc`, an ISO 'YYYY-MM-DDTHH:MM:SSZ' string); before
+    that, a later capture could still change it, so it waits."""
+    done, ready, waiting = recorded(entries), [], []
+    for r in results:
+        items = []
+        if r.id == "H7a":
+            for year, word in r.stats.items():
+                if word in ("pass", "fail"):
+                    items.append((year, word, H7A_CHECKPOINTS[int(year)]))
+            if r.status in FINAL:
+                items.append(("overall", r.status, r.decided))
+        elif r.status in FINAL:
+            items.append((None, r.status, r.decided))
+        for cp, word, decided in items:
+            if (r.id, cp) in done:
+                continue
+            if decided is None or cutoff_for(decided) >= now_utc:
+                waiting.append((r, cp, word, decided))
+            else:
+                ready.append((r, cp, word))
+    return ready, waiting
 
 
 # ---------------------------------------------------------------- loading real data
@@ -696,8 +829,7 @@ def load(root=None, cutoff=None, holdings="latest"):
         if recs:
             v = pd.read_csv(io.StringIO(parse.read_text(root, recs[-1])))
             vix = dict(zip(pd.to_datetime(v["DATE"], format="%m/%d/%Y").dt.date, v["CLOSE"].astype(float)))
-    prices = {d: (spy, spx) for d, (spy, spx, src) in spots.items()
-              if src.startswith("Roundhill") or "closes.csv" in src}
+    prices = price_rule(spots)
     deep = opts[(opts["opt_cp"] == "C") & (opts["opt_strike"] < 100)] if not opts.empty else opts
     calls = pd.DataFrame({"as_of": deep["as_of"], "account": deep["account"], "strike": deep["opt_strike"],
                           "expiry": deep["opt_expiry"], "price": deep["price"]}) if len(deep) else None
@@ -713,14 +845,23 @@ def load(root=None, cutoff=None, holdings="latest"):
                   listed=listed_rows, listed_forward=listed_forward, voids=find_voids(state, root), cutoff=cutoff)
 
 
+def price_rule(spots):
+    """P2's price rule: the issuer's reference closes, else a close the user added in data/external/closes.csv;
+    never a TradingView close (tv_closes.csv counts as missing). spots: {date: (spy, spx, source label)}."""
+    return {d: (spy, spx) for d, (spy, spx, src) in spots.items()
+            if src.startswith("Roundhill") or src.startswith("user-supplied close")}
+
+
 def counted_listed(root, cutoff, ledger_path=None):
-    """Listed readings that count under the rule in force: P2's read window, or P3's market-time window once a P3
-    protocol entry exists in the ledger. One reading per close (P2: the first in the window; P3: the latest)."""
+    """Listed readings that count under the rule in force: P2's read window, or P3's market-time window for readings
+    taken after a P3 protocol entry was recorded in the ledger. One reading per close (P2: the first in the window;
+    P3: the latest); a P3 reading replaces a P2 reading of the same close."""
     from . import ledger
     from .forward import listed as lst
     from datetime import datetime, timezone
     entries = ledger.read(ledger_path) if ledger_path else ledger.read()
-    p3 = any(e.get("id") == "P3" and e.get("kind") == "protocol" for e in entries)
+    p3_from = min((e["recorded_utc"] for e in entries if e.get("id") == "P3" and e.get("kind") == "protocol"),
+                  default=None)
     raw = root / "raw" / "tradingview_chain"
     chosen = {}
     for path in sorted(raw.glob("*/*.json")) if raw.exists() else []:
@@ -728,9 +869,11 @@ def counted_listed(root, cutoff, ledger_path=None):
             read = datetime.strptime(path.stem, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
         except ValueError:
             continue
-        if cutoff and read.strftime("%Y-%m-%dT%H:%M:%SZ") > cutoff:
+        stamp = read.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if cutoff and stamp > cutoff:
             continue
         text = path.read_text(encoding="utf-8")
+        p3 = p3_from is not None and stamp > p3_from
         if p3:
             delay = lst.feed_delay_seconds(text)
             if delay is None:
@@ -740,10 +883,11 @@ def counted_listed(root, cutoff, ledger_path=None):
             close, ok = lst.close_for(read)
         if not ok:
             continue
-        if close not in chosen or (p3 and read > chosen[close][0]) or (not p3 and read < chosen[close][0]):
-            chosen[close] = (read, text)
+        old = chosen.get(close)
+        if old is None or (p3 and (not old[2] or read > old[0])) or (not p3 and not old[2] and read < old[0]):
+            chosen[close] = (read, text, p3)
     rows = []
-    for close, (read, text) in chosen.items():
+    for close, (read, text, _) in chosen.items():
         quotes, _ = lst.parse(text)
         for sym, (bid, ask) in quotes.items():
             if sym in lst.REFERENCE:
@@ -752,23 +896,38 @@ def counted_listed(root, cutoff, ledger_path=None):
     return pd.DataFrame(rows, columns=["close_date", "strike", "bid", "ask"])
 
 
-def find_voids(state, root):
+def _option_line(r):
+    """(strike, expiry) of the close's single option line, or None (no line, or several: strike shows as NaN)."""
+    k, e = r["strike"], r["expiry"]
+    if k is None or e is None or pd.isna(k) or pd.isna(e):
+        return None
+    return round(float(k), 2), str(e)
+
+
+def find_voids(state, root=None, events_csv=None):
     """P1 void events: an option-line change (a roll), a reverse split, or an event listed by hand in
-    data/external/void_events.csv (columns date, event: a closure or liquidation notice)."""
+    data/external/void_events.csv (columns date, event, source; source names the filing or notice, required).
+
+    A roll needs one new option line, with a real strike, on two consecutive closes: a one-day file glitch (two lines,
+    or a blank) is not a roll. A reverse split: shares at most half and NAV at least 1.8x the previous close."""
     out = []
     if state is not None and not state.empty:
         s = state.sort_values("as_of").reset_index(drop=True)
-        for i in range(len(s)):
-            r = s.iloc[i]
-            if (round(float(r["strike"]), 2), str(r["expiry"])) != (XX_STRIKE, str(XX_EXPIRY)):
-                out.append((r["as_of"], f"option line changed to {r['strike']} {r['expiry']}"))
+        lines = [_option_line(s.iloc[i]) for i in range(len(s))]
+        for i in range(len(s) - 1):
+            if lines[i] is not None and lines[i] != (XX_STRIKE, str(XX_EXPIRY)) and lines[i + 1] == lines[i]:
+                out.append((s.iloc[i]["as_of"], f"option line changed to {lines[i][0]} {lines[i][1]}"))
                 break
         for i in range(1, len(s)):
             a, b = s.iloc[i - 1], s.iloc[i]
-            if b["shares_outstanding"] < 0.5 * a["shares_outstanding"] and b["nav_published"] > 1.8 * a["nav_published"]:
+            if b["shares_outstanding"] <= 0.5 * a["shares_outstanding"] * (1 + 1e-9) and \
+                    b["nav_published"] >= 1.8 * a["nav_published"]:
                 out.append((b["as_of"], "reverse split"))
-    path = root / "external" / "void_events.csv"
-    if path.exists():
-        ev = pd.read_csv(path)
-        out += [(date.fromisoformat(str(d)), str(e)) for d, e in zip(ev["date"], ev["event"])]
+    path = events_csv or (root / "external" / "void_events.csv" if root is not None else None)
+    if path is not None and path.exists():
+        ev = pd.read_csv(path, dtype=str).fillna("")
+        if "source" not in ev.columns or (ev["source"].str.strip() == "").any():
+            raise ValueError(f"{path.name}: every void event needs a source (the filing or notice that announced it)")
+        out += [(date.fromisoformat(d.strip()), f"{e} ({src})") for d, e, src in zip(ev["date"], ev["event"],
+                                                                                     ev["source"])]
     return sorted(out)

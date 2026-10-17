@@ -7,8 +7,10 @@
     py -I scripts\\verdicts.py --record due         append every completed verdict not yet in the ledger
 
 The ledger (forward/predictions.jsonl) is append-only and hash-chained: a recorded verdict stays forever, so
---record asks for nothing but refuses anything not final. After recording, re-render forward/HYPOTHESES.md and push.
-Each review reads only the files downloaded by its review date (P2). Prints aggregates only.
+--record asks for nothing but refuses anything not final, any --as-of date after today, and any verdict whose
+deciding day has not ended yet (UTC; a later capture could still change it). After recording, re-render
+forward/HYPOTHESES.md and push. Each review reads only the files downloaded by its review date (P2). Prints
+aggregates only.
 """
 import sys
 from datetime import date, datetime, timezone
@@ -18,8 +20,6 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
 from definedtarget import __version__, ledger, verdicts  # noqa: E402
-
-FINAL = {"pass", "fail", "inconclusive", "void"}
 
 
 def cached(holdings):
@@ -32,64 +32,56 @@ def cached(holdings):
     return provider
 
 
-def recorded(entries):
-    """{(id, checkpoint or None)} already in the ledger."""
-    return {(e["id"], (e.get("evidence") or {}).get("checkpoint")) for e in entries if e.get("kind") == "verdict"}
-
-
-def to_record(results, entries):
-    done, out = recorded(entries), []
-    for r in results:
-        if r.id == "H7a":
-            for year, word in r.stats.items():
-                if word in ("pass", "fail") and (r.id, year) not in done:
-                    out.append((r, year, word))
-            if r.status in FINAL and (r.id, "overall") not in done:
-                out.append((r, "overall", r.status))
-            continue
-        if r.status in FINAL and (r.id, None) not in done:
-            out.append((r, None, r.status))
-    return out
-
-
-def main(argv):
-    today = datetime.now(timezone.utc).date()
+def main(argv, ledger_path=ledger.DEFAULT_PATH, now=None, results_fn=None):
+    """`ledger_path`, `now` and `results_fn` exist for the tests; the command line uses the defaults."""
+    now = now or datetime.now(timezone.utc)
+    today = now.date()
     record = None
     args = list(argv)
     while args:
         a = args.pop(0)
-        if a == "--as-of":
+        if a == "--as-of" and args:
             today = date.fromisoformat(args.pop(0))
-        elif a == "--record":
+        elif a == "--record" and args:
             record = args.pop(0)
         else:
             print(__doc__)
             return 2
-    results = verdicts.all_results(today, cached("latest"), cached("first"))
+    if record is not None and today > now.date():
+        print(f"STOP: --record with --as-of {today}, after today ({now.date()}): a verdict is recorded only from data "
+              "that exists; nothing recorded")
+        return 1
+    results = (results_fn or (lambda d: verdicts.all_results(d, cached("latest"), cached("first"))))(today)
     print(f"Verdicts as of {today} (definedtarget {__version__}); provisional numbers are not verdicts\n")
     for r in results:
         print(r.line())
-    entries = ledger.read()
-    due = to_record(results, entries)
+    entries = ledger.read(ledger_path)
+    due, waiting = verdicts.to_record(results, entries, now.strftime("%Y-%m-%dT%H:%M:%SZ"))
     if due:
         print("\nready to record: " + ", ".join(f"{r.id}{'/' + cp if cp else ''} {w}" for r, cp, w in due))
+    for r, cp, w, decided in waiting:
+        when = f"after {decided} ends (UTC)" if decided else "(no deciding date: not recordable)"
+        print(f"waiting: {r.id}{'/' + cp if cp else ''} {w}, record {when}")
     if record is None:
         return 0
     wanted = [d for d in due if record == "due" or d[0].id == record]
     if not wanted:
-        print(f"\nnothing to record for '{record}' (not final yet, or already in the ledger)")
+        print(f"\nnothing to record for '{record}' (not final yet, its deciding day has not ended, or already in the "
+              "ledger)")
         return 1
-    ok, msg = ledger.verify()
+    ok, msg = ledger.verify(ledger_path)
     if not ok:
         print(f"STOP: ledger check failed ({msg}); nothing recorded")
         return 1
     for r, cp, word in wanted:
         evidence = {"review": r.review, "n": r.n, "stats": r.stats, "window": r.window, "note": r.note,
-                    "computed_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "computed_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "code": f"definedtarget {__version__}, scripts/verdicts.py"}
+        decided = verdicts.H7A_CHECKPOINTS[int(cp)] if r.id == "H7a" and cp not in (None, "overall") else r.decided
+        evidence["data_cutoff"] = verdicts.cutoff_for(decided)
         if cp:
             evidence["checkpoint"] = cp
-        ledger.append({"kind": "verdict", "id": r.id, "result": word, "evidence": evidence})
+        ledger.append({"kind": "verdict", "id": r.id, "result": word, "evidence": evidence}, path=ledger_path)
         print(f"recorded {r.id}{'/' + cp if cp else ''}: {word}")
     print("Now re-render forward/HYPOTHESES.md (py -I scripts\\freeze_hypotheses.py) and push.")
     return 0
