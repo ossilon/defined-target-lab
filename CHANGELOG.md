@@ -3,6 +3,14 @@
 ## Unreleased (v0.3 in progress)
 
 ### Added
+- **The monthly forecast check** (protocol FC1, frozen 2026-10-17 UTC before its first origin, 2026-10-30):
+  at each month's last close the engine forecasts XX's growth to the next month's last close under four models
+  (M1 the simulator's slide rule, M2 no slide, M3 the slide measured on VIX1Y paths, M4 VIX as the month's path
+  vol), saves the forecast privately and logs its SHA-256 in `forward/forecast_log.jsonl`; a month later it logs
+  each model's PIT for XX and for SPY. Log only, no verdict; 39 months to expiry. `definedtarget/forward/forecast.py`,
+  `scripts/forecast_check.py`; the daily routine notes a due entry and stops on a late one. Tests judge every model
+  against an exact answer (XX's NAV at the target depends only on SPY's level there): worst gap 0.0019 at 200,000
+  paths.
 - **`definedtarget.montecarlo`**, the start of a Monte Carlo engine that imports nothing else from the package, so
   other projects can use it unchanged. Step 1: counter-based random numbers (Philox4x32-10) addressed by (seed, path,
   draw, stream), 52-bit uniforms that are never 0 or 1, and Wichura's AS241 inverse normal. Results do not depend on

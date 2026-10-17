@@ -100,6 +100,16 @@ def run(root=None, report_dir=None, now=None, capture=True):
                           f"{m.prob_itm_rn:.0%}; report {report_dir.name}/{last.as_of}_report.html")
         except (ValueError, FileNotFoundError) as err:
             stops.append(f"pricing refused: {err}")
+        # The monthly forecast check (FC1): an entry is due once its close has passed (a note), and a STOP once it
+        # is past its deadline, so a month cannot slip by unnoticed. Recording stays a manual command.
+        try:
+            from . import forecast
+            for kind, t, close, dl, late in forecast.due(now.astimezone(forecast.NEW_YORK).date()):
+                msg = (f"FC1 {kind} for origin {t} (close {close}) {'is past its deadline ' if late else 'is due by '}"
+                       f"{dl}: py -I scripts\\forecast_check.py {kind} --origin {t}")
+                (stops if late else notes).append(msg)
+        except (ValueError, FileNotFoundError) as err:
+            stops.append(f"forecast check refused: {err}")
         note = [
             f"# XX daily note, close {last.as_of}",
             "",

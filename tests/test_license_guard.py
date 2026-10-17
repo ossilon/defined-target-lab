@@ -42,6 +42,14 @@ prose = "Review on 2027-04-14.\n2026-10-13: one note with 1.5 and 2.5 in it\n| 2
 check("dates in prose or rows with one number do not count", scan_ids.daily_series_rows(prose) == 0,
       scan_ids.daily_series_rows(prose))
 
+# 2b. The British-spelling check (public style rule): the plural noun "analyses" is American too and passes.
+brit = scan_ids.GENERIC["British spelling"]
+for stem, end in (("analy", "se"), ("analy", "sed"), ("analy", "sing"), ("Analy", "ser"), ("behavio", "ur"),
+                  ("mode", "lled"), ("labe", "lled"), ("colo", "urs")):  # split, so this file passes the scan itself
+    check(f"British spelling '{stem}{end}' is caught", brit.search(f"the {stem}{end} here") is not None)
+for word in ("analyses of the saved forecasts", "analyzes", "analyzed", "analysis", "behavior", "modeled", "center"):
+    check(f"'{word}' passes", brit.search(f"the {word} here") is None)
+
 # 3. The scan refuses a data file and a pasted series (synthetic files in a temporary folder).
 with tempfile.TemporaryDirectory() as tmp:
     csv = Path(tmp) / "prices.csv"

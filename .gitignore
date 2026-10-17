@@ -17,6 +17,7 @@ AUDIT_B10D_REVIEW.md
 docs/README_DRAFT.md
 forward/hypotheses_draft.json
 forward/P3_draft.md
+forward/FC1_draft.md
 forward/hypotheses_draft_v1.json
 identifiers_local.txt
 
@@ -40,3 +41,4 @@ dist/
 .venv/
 .pytest_cache/
 .env
+V033_POLISH_PLAN.md

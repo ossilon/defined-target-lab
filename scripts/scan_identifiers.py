@@ -29,10 +29,13 @@ GENERIC = {
     "home directory path": re.compile(r"[A-Za-z]:\\Users\\[^\\\s]+|/home/[a-z0-9_-]+|/Users/[A-Za-z0-9_-]+"),
     "email address": re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
     "possible secret": re.compile(r"(?i)(api[_-]?key|secret|token|password)\s*[:=]\s*['\"][^'\"]{8,}"),
-    # public style rule: plain American English (catches common British spellings)
+    # public style rule: plain American English (catches common British spellings). "analyses" passes: it is also
+    # the American plural of the noun "analysis" (found 2026-10-18 in frozen protocol FC1); the verb forms analyse,
+    # analysed, analysing and analyser still fail.
     "British spelling": re.compile(r"(?i)\b\w*(behaviour|licence|organis|recognis|summaris|centre|neighbour|favour"
                                    r"|colour|programme|labell|modell|cancell|catalogue|whilst|towards|realis|vectoris"
-                                   r"|itemis|minimis|maximis|optimis|prioritis|parallelis|analyse)\w*"),
+                                   r"|itemis|minimis|maximis|optimis|prioritis|parallelis"
+                                   r"|analys(?:e\b|ed|ing|er))\w*"),
 }
 ALLOWED_EMAILS = {"info@roundhillinvestments.com"}         # public issuer contact, cited in docs
 DATA_SUFFIXES = {".csv", ".json", ".jsonl", ".xls", ".xlsx", ".pdf", ".parquet"}
