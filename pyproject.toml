@@ -26,7 +26,7 @@ classifiers = [
 definedtarget = "definedtarget.__main__:main"
 
 [tool.setuptools]
-packages = ["definedtarget", "definedtarget.forward"]
+packages = ["definedtarget", "definedtarget.forward", "definedtarget.montecarlo"]
 
 [tool.setuptools.package-data]
 definedtarget = ["funds/*.json"]

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased (v0.3 in progress)
+
+### Added
+- **`definedtarget.montecarlo`**, the start of a Monte Carlo engine that imports nothing else from the package, so
+  other projects can use it unchanged. Step 1: counter-based random numbers (Philox4x32-10) addressed by (seed, path,
+  draw, stream), 52-bit uniforms that are never 0 or 1, and Wichura's AS241 inverse normal. Results do not depend on
+  the number of threads, the chunk size or the device: the optional GPU twin (`montecarlo.gpu`, needs CuPy) returns
+  the same 32-bit words and uniforms bit for bit, and on the test machine the same normals too.
+- Tests against Random123's published known answers (7 and 10 rounds), scipy's `ndtri` (to 1e-14 relative from
+  p = 1e-300), thread and chunk invariance, and loose statistical checks.
+- `scripts/b17a_gpu_first_test.py` and FINDINGS F14: a first GPU speed test.
+
 ## v0.2.3 (2026-10-17)
 
 Fixes from an independent external audit of v0.2.2, checked by a second independent audit before release. The
