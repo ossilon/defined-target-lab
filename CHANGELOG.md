@@ -11,7 +11,7 @@ index level on any date up to its target date.
   `analytics.py` (odds, break-evens, values) and `pricing.implied_vol` for XX to 1e-9, and checked against a million
   simulated outcomes for puts, sold calls and strangles.
 - **Browser engine** (`web/engine.js`, no libraries) and **self-test** (`web/selftest.html`): 780 answers written by
-  the Python engine (`scripts/make_golden.py` -> `web/golden.js`, 88 KB) must all match in the browser; it opens
+  the Python engine (`scripts/make_golden.py` -> `web/golden.js`, 101 KB) must all match in the browser; it opens
   from a double-clicked file too, and a test fails if the answers go stale.
 - **The simulator page** (`web/index.html`, `web/app.js`): a date x S&P heatmap of one share's P/L, value or
   leverage, with the odds of finishing above each level; a summary (max loss, break-even, growth needed, leverage,
@@ -23,8 +23,9 @@ index level on any date up to its target date.
   odds rows up to a 24% mean total return plus a custom row checked against history (FINDINGS F13,
   `scripts/history_windows.py`); a link at the end of the daily report opens the simulator with that close's inputs.
   Volatility is solved on the rising side of the value curve, so call spreads work. Scripts load with a version tag,
-  so browsers never mix an old engine with a new page. A spec names its index (or the page infers it from SPY, QQQ, DIA, IWM and refuses a contradiction), can carry its own example prices, and comes with SPY call-spread, QQQ/NDX 50,000 and DIA/DJIA 75,000 examples; for an index other than the S&P 500
-  the page relabels itself and greys out the S&P-only evidence (F10, F12, F13). An impossible price gets an
+  so browsers never mix an old engine with a new page. A spec names its index (or the page infers it from SPY, QQQ,
+  DIA, IWM and refuses a contradiction), can carry its own example prices, and comes with SPY call-spread, QQQ/NDX
+  50,000 and DIA/DJIA 75,000 examples; for an index other than the S&P 500 the page relabels itself and greys out the S&P-only evidence (F10, F12, F13). An impossible price gets an
   explanation and a one-click fair price; SOLVE VOL and EXAMPLE confirm what they did.
 - **docs/learn/05**: how to read the simulator.
 - **Audit B10b** (independent model, full review of v0.2): its fixes are in this release: exact odds for funds with
