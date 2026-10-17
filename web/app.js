@@ -173,6 +173,8 @@
   function render() {
     var v = readInputs(), note = $("inNote");
     $("volNote").innerHTML = S.volTyped ? "&lt;- TYPED (SOLVE VOL to undo)" : "&lt;- SOLVED FROM PRICE";
+    $("solve").disabled = !S.volTyped;
+    $("solve").title = S.volTyped ? "Solve the implied vol from the price paid again" : "The vol is already solved from the price paid";
     if (v.bad.length) { note.innerHTML = '<span class="err">check: ' + esc(v.bad.join(", ")) + "</span>"; return; }
     var M = model(v);
     if (!isFinite(M.vol) || M.vol <= 0) {
@@ -462,13 +464,24 @@
         later();
       });
     });
-    $("solve").addEventListener("click", function () { S.volTyped = false; render(); });
+    var flashTimer = null;
+    function flash(text) {                              // a short confirmation beside the buttons
+      $("status").textContent = "> " + text;
+      clearTimeout(flashTimer);
+      flashTimer = setTimeout(function () { $("status").textContent = ""; }, 3000);
+    }
+    $("solve").addEventListener("click", function () {
+      var typed = $("vol").value;
+      S.volTyped = false; render();
+      flash("VOL SOLVED FROM PRICE: " + $("vol").value + "% (WAS TYPED " + typed + "%)");
+    });
     $("inNote").addEventListener("click", function (e) {      // "USE FAIR PRICE": reprice at the last good vol
       var b = e.target.closest ? e.target.closest("button[data-fair]") : null;
       if (b) { $("paid").value = b.getAttribute("data-fair"); S.volTyped = false; render(); }
     });
     $("reset").addEventListener("click", function () {
       S.fromLink = false; loadFund(S.fund); history.replaceState(null, "", location.pathname + location.search); render();
+      flash("EXAMPLE LOADED (CLOSE OF " + MARKET.date + ")" + (S.fund === "SPEC" ? "; YOUR SPEC IS KEPT" : ""));
     });
     $("specApply").addEventListener("click", function () {
       try {
