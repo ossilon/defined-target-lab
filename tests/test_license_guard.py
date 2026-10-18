@@ -79,6 +79,30 @@ with tempfile.TemporaryDirectory() as tmp:
     check("a JSON file outside results/manifests/ still fails", any(p.startswith("results/other.json") for p in probs),
           probs)
 
+# 2d. The allowed JSON places accept only the shapes the tools write (audit of v0.3.0, D12): a private forecast or a
+#     price series saved there fails.
+import json as _json  # noqa: E402
+
+with tempfile.TemporaryDirectory() as tmp:
+    priv = Path(tmp) / "private.json"
+    priv.write_text(_json.dumps({"protocol": "FC1", "origin": "2026-10-30", "inputs": {"spot": 778.01, "nav": 26.51},
+                                 "models": {"M1": {"growth_levels": [0.9, 1.0, 1.1]}}}), encoding="utf-8")
+    prices = Path(tmp) / "prices.json"
+    prices.write_text(_json.dumps([{"date": f"2026-10-{d:02d}", "close": 100 + d / 10} for d in range(1, 21)]),
+                      encoding="utf-8")
+    probs = scan_ids.scan([("results/manifests/private.json", priv), ("results/manifests/prices.json", prices),
+                           ("forward/forecast_log.jsonl", priv)], handle="", url="")
+    for rel in ("results/manifests/private.json", "results/manifests/prices.json", "forward/forecast_log.jsonl"):
+        check(f"D12: a private forecast or price series as {rel} fails the scan", any(p.startswith(rel) for p in probs), probs)
+
+# 2e. The package metadata parses as the README's `pip install .` needs (audit of v0.3.0, D20)
+import tomllib  # noqa: E402
+
+meta = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+check("D20: keywords and classifiers sit under [project]; the only optional extra is 'flex'",
+      "monte-carlo" in meta.get("keywords", []) and any("Python :: 3" in c for c in meta.get("classifiers", []))
+      and set(meta.get("optional-dependencies", {})) == {"flex"}, meta.get("optional-dependencies"))
+
 # 3. The scan refuses a data file and a pasted series (synthetic files in a temporary folder).
 with tempfile.TemporaryDirectory() as tmp:
     csv = Path(tmp) / "prices.csv"

@@ -48,6 +48,32 @@ ALLOWED_IMAGE_DIRS = ("docs/img/",)
 ALLOWED_DATA_FILES = {"forward/predictions.jsonl", "forward/forecast_log.jsonl"}
 # Run manifests (montecarlo.manifest): fingerprints, settings and versions, no data; contents scanned too.
 ALLOWED_MANIFEST_DIR = "results/manifests/"
+# The allowed JSON must have the shape these tools write, so a private forecast or a pasted price series cannot pass
+# as a manifest or a log line (audit of v0.3.0, D12).
+MANIFEST_KEYS = {"kind", "name", "argv", "seeds", "settings", "deterministic", "inputs", "code", "date_utc", "seconds",
+                 "versions", "output"}
+FORECAST_LOG_KEYS = {"kind", "protocol", "origin", "target", "seed", "paths", "models", "forecast_sha256",
+                     "code_sha256", "pit", "void", "events_review", "outcomes", "voids", "summary",
+                     "recorded_utc_date", "late", "prev_hash", "row_hash"}
+
+
+def json_shape_problems(rel, text):
+    """Problems with an allowed JSON file whose shape is not what the project's tools write."""
+    import json
+    try:
+        if rel.endswith(".jsonl"):
+            rows = [json.loads(line) for line in text.splitlines() if line.strip()]
+            if rel == "forward/predictions.jsonl":
+                return []                                    # the frozen ledger: checked by tests/test_ledger.py
+            bad = [i for i, r in enumerate(rows, 1) if not isinstance(r, dict) or r.get("protocol") != "FC1"
+                   or r.get("kind") not in ("forecast", "outcome", "report") or set(r) - FORECAST_LOG_KEYS]
+            return [f"{rel}:{i}: not a forecast-log entry (unexpected kind or fields)" for i in bad]
+        rec = json.loads(text)
+    except ValueError:
+        return [f"{rel}: not valid JSON"]
+    ok = (isinstance(rec, dict) and rec.get("kind") == "run manifest" and not set(rec) - MANIFEST_KEYS
+          and all(isinstance(v, dict) and set(v) <= {"file", "bytes", "sha256"} for v in rec.get("inputs", {}).values()))
+    return [] if ok else [f"{rel}: not a run manifest (unexpected kind or fields)"]
 # Attribution: where the handle may stand, per file (the handle must follow this prefix directly).
 ATTRIBUTION_PREFIX = {"LICENSE": r"^Copyright \(c\) \d{4} ",
                       "CITATION.cff": r"^\s*-\s*(?:name|alias):\s*\"?",
@@ -205,6 +231,8 @@ def scan(files=None, personal=(), handle=None, url=None):
         if suffix not in TEXT_SUFFIXES and not allowed_file:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
+        if allowed_file:
+            problems += json_shape_problems(rel, text)
         rows = daily_series_rows(text)
         if rows > MAX_DATED_ROWS:
             problems.append(f"{rel}: {rows} dated numeric rows; looks like a daily series")

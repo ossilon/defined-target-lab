@@ -88,8 +88,9 @@ def _prep(data, mean_block):
     d = np.ascontiguousarray(np.asarray(data, dtype=np.float64))
     if d.ndim == 1:
         d = d[:, None]
-    if d.ndim != 2 or d.shape[0] < 2 or not np.isfinite(d).all():
-        raise ValueError("history must be a 1-D or 2-D array of finite numbers with at least 2 rows")
+    # at least one column: the kernel reads column 0 (audit of v0.3.0, D23: a 0-column history read past the array)
+    if d.ndim != 2 or d.shape[0] < 2 or d.shape[1] < 1 or not np.isfinite(d).all():
+        raise ValueError("history must be a 1-D or 2-D array of finite numbers with at least 2 rows and 1 column")
     if not mean_block >= 1.0:
         raise ValueError("mean_block (the mean run length, in steps) must be at least 1")
     return d, 1.0 / mean_block

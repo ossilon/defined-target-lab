@@ -11,9 +11,6 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = ["numpy", "pandas", "numba", "scipy"]   # scipy: the Welch tests of H1 and H9
-
-[project.optional-dependencies]
-flex = ["openpyxl"]    # reading saved Cboe FLEX reports (definedtarget.forward.cboe_flex.extract_fills)
 keywords = ["etf", "options", "leaps", "flex-options", "black-scholes", "implied-volatility", "monte-carlo",
             "forward-testing"]
 classifiers = [
@@ -21,6 +18,11 @@ classifiers = [
     "Intended Audience :: Financial and Insurance Industry",
     "Topic :: Office/Business :: Financial :: Investment",
 ]
+
+# keywords and classifiers belong to [project] above: under this table TOML made them dependency groups, which broke
+# `pip install .` (audit of v0.3.0, D20)
+[project.optional-dependencies]
+flex = ["openpyxl"]    # reading saved Cboe FLEX reports (definedtarget.forward.cboe_flex.extract_fills)
 
 [project.scripts]
 definedtarget = "definedtarget.__main__:main"

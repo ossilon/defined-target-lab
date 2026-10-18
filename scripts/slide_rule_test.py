@@ -7,7 +7,7 @@
 Fixed before the first run (2026-10-17):
 - A synthetic XX starts at every 21st session from 2007-01-03 that has 815 sessions of real S&P 500 history ahead
   (XX's life from 2026-10-13 to 2030-01-10). Same shape as XX: one call per share-unit at 1.27892 x the start
-  level, cash 0.2474 / 778.01 per $1 of start level, 0.99% fee paid by selling options, rate 4.86498% and dividend
+  level, cash 0.2474 / (0.48 x 778.01) per $1 of start level, 0.99% fee paid by selling options, rate 4.86498% and dividend
   yield 1.03% held constant (to isolate vol), year fractions ACT/365 from the real session dates.
 - Each is marked every session three ways, all starting at the same implied vol v0 = 0.77 x VIX1Y on the start day
   (0.77: the implied-vol / VIX1Y multiplier from the design review of 2026-10-14, an assumption):
@@ -19,6 +19,10 @@ Fixed before the first run (2026-10-17):
   (percentage points) and in highest NAV / start; and the slide of 0.77 x VIX1Y measured on the real data (points of
   implied vol per -10% of the S&P, from a regression of daily changes on daily log returns, and from 63-session
   changes). End values are identical in A, B and C (the payoff ignores vol) and are not reported.
+Corrected 2026-10-18 after an independent external audit of v0.3.0 (FINDINGS F18 updated): the cash per $1 of start
+level is 0.2474 / (0.48 x 778.01), XX's cash for one call (the first run used 0.2474 / 778.01, half of XX's cash
+weight); a session at its previous high no longer counts as underwater; the VIX1Y file's fetch date moved from the
+printed output to the manifest's settings.
 Prints aggregates only; research, not investment advice.
 """
 import io
@@ -37,7 +41,9 @@ from definedtarget.forward import fetch, parse  # noqa: E402
 from definedtarget.montecarlo import manifest  # noqa: E402
 
 LIFE, EVERY, M_MULT, SLIDE = 815, 21, 0.77, 0.01
-K, CASH, FEE, R, Q = 1.27892, 0.2474 / 778.01, 0.0099, 0.0486498, 0.0103
+# Per $1 of the start level with ONE call: the strike is 995.01 / 778.01, and the cash is XX's 0.2474 per share
+# divided by its 0.48 calls (audit of v0.3.0, D09: it was 0.2474 / 778.01, half of XX's cash weight)
+K, CASH, FEE, R, Q = 1.27892, 0.2474 / (0.48 * 778.01), 0.0099, 0.0486498, 0.0103
 
 
 def load():
@@ -68,7 +74,7 @@ def life_stats(nav):
     mdd = float((1 - nav / top).max())
     under, spell = 0, 0
     for i in range(1, nav.size):
-        spell = 0 if nav[i] > top[i - 1] else spell + 1
+        spell = 0 if nav[i] >= top[i - 1] else spell + 1      # at the high is not below it (D16)
         under = max(under, spell)
     return mdd, under, float(nav.max() / nav[0]), bool((nav >= 2 * nav[0]).any())
 
@@ -79,7 +85,8 @@ def main():
     with manifest.run("slide_rule_test", sys.argv[1:], REPO / "results" / "manifests", REPO,
                       ("scripts/slide_rule_test.py",),
                       inputs={"spx": spx_path, "vix1y": vix_path},
-                      settings={"life": LIFE, "every": EVERY, "m": M_MULT, "slide": SLIDE}) as m:
+                      settings={"life": LIFE, "every": EVERY, "m": M_MULT, "slide": SLIDE,
+                                "vix1y_fetched_utc_date": fetched}) as m:     # metadata, not output (D13)
         report(df, fetched)
     print(f"run manifest: results/manifests/{m['path'].name}")
 
@@ -88,7 +95,7 @@ def report(df, fetched):
     S_all, V_all = df["close"].to_numpy(float), df["vix1y"].to_numpy(float) / 100.0
     dates = df["date"].to_numpy()
     print(f"S&P 500 and VIX1Y on common sessions: {pd.Timestamp(dates[0]).date()} to {pd.Timestamp(dates[-1]).date()} "
-          f"({len(df):,} sessions; VIX1Y file fetched {fetched})")
+          f"({len(df):,} sessions)")
     starts = range(0, len(df) - LIFE, EVERY)
     res = {k: [] for k in "ABC"}
     for s in starts:

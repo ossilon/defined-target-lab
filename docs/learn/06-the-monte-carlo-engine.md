@@ -18,8 +18,8 @@ step, stream), through the Philox4x32-10 generator. Path 7,341,002 at step 400 g
 against its authors' published answers (Random123), and the CPU and GPU against each other: the GPU matches to the
 last digit, except about 1 in 40,000 extreme draws, where NVIDIA's logarithm rounds the last digit differently.
 
-**2. Error bars that hold.** Every result comes with a standard error or a 95% interval. A test proves the intervals
-honest: 1,000 independent runs against exact answers. The 95% intervals contained the truth 94.0% (price), 94.2%
+**2. Error bars that hold.** Every result comes with a standard error or a 95% interval. A test checks the intervals
+are honest: 1,000 independent runs against exact answers. The 95% intervals contained the truth 94.0% (price), 94.2%
 (a probability) and 95.4-95.8% (percentiles) of the time, inside the 93.2-96.8% band fixed before the run. The test
 also shows why the engine uses Wilson intervals for probabilities: for a rare event, the textbook interval covered
 the truth only 87.7% of the time; Wilson's covered 94.8%.
@@ -30,11 +30,14 @@ for the expected highest close, the reflection principle for the chance of touch
 (Broadie-Glasserman-Kou for touches checked at closes, Magdon-Ismail's expected maximum drawdown); they must sit
 within allowances fixed before the run.
 
-**4. A billion paths in fixed memory.** The engine never stores all paths. It merges running totals and fine
-histograms and finds exact percentiles with a second pass. On the test machine (`scripts/billion_paths_demo.py`),
-the option's value to a standard error of 0.004 took 1.10 billion paths in 27 s (54.67960 against the formula's
-54.67744), and the exact median of a billion end prices took 52 s while keeping 191,183 values. `run_to_precision` picks the path count for a target
-error, so "how accurate" replaces "how many paths".
+**4. A billion paths in little memory.** The engine never stores all paths. It merges running totals and fine
+histograms and finds exact percentiles with a second pass that keeps only the values in one histogram bin (about
+1 in 65,536 of them for a smooth distribution), each distinct value once, so a payoff of exactly zero on most paths
+costs one entry. On the test machine (`scripts/billion_paths_demo.py`), the option's value to a standard error of
+0.004 took 1.10 billion paths in about 30 s (54.67960 against the formula's 54.67744), and the exact median of a billion
+end prices took under a minute while keeping 191,183 values (times vary by run). `run_to_precision` picks the path count for a target standard
+error, so "how accurate" replaces "how many paths". The standard error is itself an estimate: a rare payoff that the
+pilot run never sees can leave it far too small, so check rare-event results with enough paths to see the event.
 
 **5. Real history, not only the bell curve.** The bootstrap builds futures from blocks of real S&P 500 days (the
 circular stationary bootstrap, three mean block lengths: about 1 month, 6 months, 2 years). It can reset history
@@ -47,7 +50,9 @@ CPU and the GPU. `montecarlo.causal.check(rule, series)` tests any later trading
 future after every cut point with eight different futures (reversed, shuffled, flat, a crash, a spike, noise, none
 at all, and a longer one) and
 requires every earlier decision to stay identical. It catches a centered average, tomorrow's value, a full-sample
-z-score, and rules that peek only on month-ends or only before a crash. It does not check execution timing, rules
+z-score, and rules that peek only on month-ends or only before a crash. A clean result means no look-ahead was
+found at the cuts and futures it tried, not a proof: a rule can peek only at an untried cut (longer series get 100
+cuts) or only for a future none of the eight resembles. It does not check execution timing, rules
 whose parameters were fitted on the whole history, or data revised or published late; the planned backtest toolkit
 covers those.
 

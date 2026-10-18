@@ -68,7 +68,9 @@ def wilson(hits, n, level=0.95):
     p = hits / n
     center = (p + z * z / (2 * n)) / (1 + z * z / n)
     half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
-    return p, center - half, center + half
+    lo, hi = max(center - half, 0.0), min(center + half, 1.0)
+    # the exact endpoints at 0 and n hits (rounding put them 1e-17 inside; audit of v0.3.0, D22)
+    return p, (0.0 if hits == 0 else lo), (1.0 if hits == n else hi)
 
 
 def wald(hits, n, level=0.95):

@@ -1,5 +1,58 @@
 # Changelog
 
+## v0.3.0.1 (2026-10-18)
+
+Fixes from an independent external audit of v0.3.0. The audit ran the full test suite on Linux (Python 3.10 and 3.12)
+and reproduced F17 and F19 byte for byte there; it supplied a reproduction for every finding, and each fix below was
+checked against that reproduction. No frozen claim, band, window or rule changed; the monthly forecast check (FC1)
+has no entries yet, so every FC1 fix applies from its first month.
+
+### Fixed: the monthly forecast check (FC1), before its first origin (2026-10-30)
+- A blank or invalid NAV or SPY close is refused instead of being scored as NaN and recorded for good; the log never
+  writes a NaN (`allow_nan=False`), and a PIT outside (0, 1) is refused.
+- Void months (rule 8) are enforced. `outcome` checks the data for a roll or option change, a reverse split,
+  options per share moving more than 5% between closes, and every event in `data/external/void_events.csv`, and
+  refuses to score a month with one; otherwise it scores only after the operator confirms the review of the issuer's
+  notices (`--no-events`) or records the void (`--void "..."`). The outcome entry records how the review was done.
+  Before, a reverse split was treated as an ordinary creation and scored.
+- Deadlines end with the deadline session's close, 16:00 New York (13:00 on an early-close day; one FC1 deadline is
+  one: 2029-07-03), as rule 7 says "by the end of the second NYSE session"; the code used the end of the day. No entry
+  can be recorded before its own session has ended.
+- A forecast saved privately whose log entry failed to write is logged from its saved bytes on the next run (never
+  recomputed); the log is checked before any work.
+- Rule 9's report is part of the workflow: `due` lists it after every 12 outcome entries and after the last, and
+  `report` appends the summary (PITs only) to the log.
+- The saved forecast records which saved files its inputs came from (the issuer's holdings file and the VIX history:
+  name, download date, SHA-256), and the VIX history is the one captured by the deadline when one exists, so a
+  later revision of either is visible. Forecast entries fingerprint every loaded module, the input code included.
+- The inputs are checked (finite, positive where they must be) before a forecast is saved.
+
+### Fixed: a published table
+- FINDINGS F18: each synthetic XX held half of XX's cash weight (0.45% instead of 0.94% at the start; the cash was
+  scaled for 0.48 calls while the script prices one). Corrected and rerun: drawdowns moved 0.3-0.4 points (median
+  83.7% with real VIX1Y against 91.2-91.3%), peaks 0.01-0.02x; the gaps between markings and the measured slide (3.55
+  points per -10%) did not change.
+
+### Fixed: install, engine and scanner
+- `pip install .` failed: `keywords` and `classifiers` sat under `[project.optional-dependencies]` (since v0.2.3).
+- Exact percentiles keep each distinct value once, so a payoff of exactly zero on most paths costs one entry instead
+  of one per path; the docs no longer say "fixed memory" (the replay keeps one histogram bin's values).
+- `run_to_precision`'s pilot obeys `max_paths` and the chunk size, and a target standard error of 0 is refused; the
+  docs say the standard error is an estimate that a rare, unseen payoff can make too small.
+- The engine refuses a bootstrap history with no columns (the kernel read past the array), and the XX layer refuses
+  non-finite or invalid pricing inputs.
+- A session at its previous high no longer counts as underwater (XX layer and F18); no published number moved.
+- Wilson intervals reach exactly 0 and 1 at 0 and n hits.
+- Run manifests reduce a Windows path to its file name on any system; the GPU stress test records its input file;
+  the F18 script's VIX1Y fetch date moved from its printed output into the manifest's settings.
+- The look-ahead checker's docs no longer say it "proves" causality: a clean result means none was found at the cuts
+  and futures it tried.
+- Tests: a cross-platform test compared two `exp` implementations bit for bit and failed on Linux (now within 1e-15);
+  the import-isolation test also catches relative imports that leave the engine; the scanner accepts only the shapes
+  the tools write in the forecast log and the manifests folder.
+- Left for the v0.3.3 interface review: checks on the single-number random-number functions, and the barrier-at-start
+  and step-numbering conventions.
+
 ## v0.3.0 (2026-10-18)
 
 A Monte Carlo engine for the CPU and an optional NVIDIA GPU (`definedtarget.montecarlo`), with XX as its first user:

@@ -40,7 +40,8 @@ def _public_arg(a):
     try:
         p = Path(a)
         if len(a) > 2 and (p.exists() or "\\" in a or "/" in a):
-            return p.name
+            # split on both separators: on Linux or macOS, Path() keeps a Windows path whole (audit of v0.3.0, D18)
+            return a.replace("\\", "/").rstrip("/").split("/")[-1]
     except (OSError, ValueError):
         pass
     return a

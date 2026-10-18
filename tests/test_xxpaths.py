@@ -35,7 +35,16 @@ check(f"day-0 NAV from the kernel equals sim.share_value ({o['nav0']:.6f})", abs
 payoff = math.exp(-XX.fee * T) * 0.48 * np.maximum(o["etf_end"] - 995.01, 0.0) + XX.cash
 check("end NAV equals the payoff on every path", float(np.abs(o["nav_end"] - payoff).max()) < 1e-12)
 lg = lp.lognormal(11, 200_000, times, R - Q, 0.166)
-check("the ETF path is montecarlo.paths.lognormal's, bit for bit", np.array_equal(o["etf_end"], S0 * np.exp(lg["log_end"])))
+# The same log path: prices agree to the last digit or two. The kernel's scalar exp and numpy's vector exp may round
+# the last bit differently on some systems (audit of v0.3.0, D10: 89 of 2,000 differ by up to 2.9e-16 on Linux).
+_rel = np.abs(o["etf_end"] / (S0 * np.exp(lg["log_end"])) - 1.0)
+check(f"the ETF path is montecarlo.paths.lognormal's (largest relative gap {_rel.max():.1e}, allowed 1e-15: exp's "
+      "last-bit rounding)", float(_rel.max()) <= 1e-15)
+for _bad, _kw in (("a NaN implied vol", dict(implied_vol=float("nan"))), ("a NaN slide", dict(slide=float("nan"))),
+                  ("a zero ETF price", dict(S0=0.0))):
+    _a = dict(seed=1, npaths=3, fund=XX, market=M, S0=S0, times=times, realized_vol=0.166, implied_vol=0.166)
+    _a.update(_kw)
+    raises(f"D15: the XX layer refuses {_bad}", lambda a=_a: xp.simulate(**a), "invalid fund or pricing input")
 check("the last checkpoint is the end NAV", np.array_equal(o["nav_at_checkpoint"][:, -1], o["nav_end"]))
 
 # Whole NAV paths recomputed in plain Python with sim.share_value and sim.vol_at (short grid, slide on, a few paths)

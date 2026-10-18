@@ -1,4 +1,4 @@
-"""Streaming: results from any number of paths in fixed memory, chunk by chunk.
+"""Streaming: results from any number of paths in little memory, chunk by chunk.
 
 Plain words
 - A *chunk function* simulates paths path0 .. path0 + n - 1 and returns one number per path (an end price, a
@@ -84,20 +84,30 @@ def order_statistics(chunk_fn, npaths, ranks, chunk=10_000_000, hist=None):
     hist = hist or histogram_for(chunk_fn, npaths, chunk)
     wanted = {r: hist.slot_of_rank(r) for r in ranks}
     slots = sorted({s for s, _ in wanted.values()})
-    kept = {s: [] for s in slots}
+    # The replay keeps each needed bin's values as (distinct value, count) pairs, so a large atom (a payoff of exactly
+    # zero for most paths) costs one entry, not one per path (audit of v0.3.0, D07). Same order statistics, bit for bit.
+    kept = {s: ([], []) for s in slots}
     for p0, n in chunks(npaths, chunk):                          # the replay: same paths, same numbers
         x = chunk_fn(p0, n)
         idx = hist.index(x)
         for s in slots:
-            kept[s].append(x[idx == s])
-    kept = {s: np.sort(np.concatenate(v)) for s, v in kept.items()}
-    out = {r: float(kept[s][r - before - 1]) for r, (s, before) in wanted.items()}
-    return out, {"kept_values": int(sum(v.size for v in kept.values())), "paths": npaths}
+            u, c = np.unique(x[idx == s], return_counts=True)
+            kept[s][0].append(u)
+            kept[s][1].append(c)
+    merged = {}
+    for s, (us, cs) in kept.items():
+        u, inv = np.unique(np.concatenate(us), return_inverse=True)
+        merged[s] = (u, np.cumsum(np.bincount(inv, weights=np.concatenate(cs)).astype(np.int64)))
+    out = {}
+    for r, (s, before) in wanted.items():
+        u, cum = merged[s]
+        out[r] = float(u[np.searchsorted(cum, r - before)])      # the first distinct value whose count reaches the rank
+    return out, {"kept_values": int(sum(u.size for u, _ in merged.values())), "paths": npaths}
 
 
 def quantile(chunk_fn, npaths, q, level=0.95, chunk=10_000_000):
     """(estimate, low, high) for the q-th percentile from npaths paths: the same order statistics as
-    stats.quantile_interval on all values, computed in fixed memory."""
+    stats.quantile_interval on all values, computed keeping only one histogram bin's distinct values."""
     h = z_for(level) * math.sqrt(npaths * q * (1 - q))
     r_est = max(math.ceil(npaths * q), 1)
     r_lo = min(max(math.floor(npaths * q - h), 1), npaths)
@@ -120,7 +130,9 @@ def run_to_precision(chunk_fn, target_se, pilot=100_000, chunk=10_000_000, max_p
     A pilot estimates the spread; the paths needed are (sd / target)^2; the next paths continue the same numbering
     (pilot paths included in the result), and the loop tops up if the full-run spread turns out larger.
     Returns (Moments, report dict)."""
-    m = moments(chunk_fn, pilot)
+    if not (math.isfinite(target_se) and target_se > 0) or pilot < 2 or max_paths < 2 or chunk < 1:
+        raise ValueError("target_se must be positive and finite; pilot and max_paths at least 2; chunk at least 1")
+    m = moments(chunk_fn, min(pilot, max_paths), chunk)     # the pilot obeys max_paths and chunk too (D08)
     planned = []
     while m.se > target_se and m.n < max_paths:
         need = min(max(math.ceil(m.var / target_se ** 2 * 1.01), m.n + m.n // 10 + 1), max_paths)  # always grows

@@ -1,15 +1,15 @@
 {
  "argv": [],
  "code": {
-  "definedtarget/__init__.py": "c29f6b29683e2bb18635a494a737d9ca044ce7968ba7f80d006db9d354b565c5",
+  "definedtarget/__init__.py": "2c426c070e22a09e2a7bb68eae6e89c9093fb2f457b0cb418973946927c2e069",
   "definedtarget/calendar.py": "326c930f3599c0f5d6b5b71aa85cda2d29f509506e4a0dc62f26651169d0a8ef",
-  "definedtarget/montecarlo/__init__.py": "9d9361aaa6b676dbbb25e5444b7ec2279006800168935dda0b76c9df51ac7998",
-  "definedtarget/montecarlo/manifest.py": "abcbb9431326bfdc5fa675d1df637502dc094d762f81e306d51c8bb40cb45481",
+  "definedtarget/montecarlo/__init__.py": "1071aaadf944453a4820991835c86577f83918dc2b146c375e85ef5e8adcd339",
+  "definedtarget/montecarlo/manifest.py": "8b3c98f60d3dddc49053835191274a139b31241de4b806b76ef12b377e84f807",
   "definedtarget/montecarlo/paths.py": "e0648bce8e3c182f031aec22ac36e61029775b62adc3750b4c1ffdb6bbf28279",
   "definedtarget/montecarlo/rng.py": "fcce8bb63e35a00ad7c7b36fddf3a7e347963c603d0f4c8147b32a718a251ebc",
   "definedtarget/pricing.py": "13854e1285404bc4730f66cc5a9c92aeb4c3bde3270aacc87f7cb4cd759779d4",
   "definedtarget/sim.py": "27e77a0b5fa23bbeca5c164219c44f22876b4a278fd8b22138b4e32f4c1c7a74",
-  "definedtarget/xxpaths.py": "6a23fe3563789b4df1f9d25bb226c2de94b74736d62c9655bacea5bddde35ef3",
+  "definedtarget/xxpaths.py": "c4c878e06d0049f3b0dbb512f515d22c83d61bb893c918daf6b8caf5597a5458",
   "scripts/effective_leverage_study.py": "455ed46254bbb2c2442638fcaa32ddb6bae90acece9a86d8e75d807dbf6edde6"
  },
  "date_utc": "2026-10-18",
@@ -21,7 +21,7 @@
   "lines": 13,
   "sha256": "473bcf3de55a500cff59a9971deaf8a6e4fbb429f57c70765f4eb4d4437c7fda"
  },
- "seconds": 35.0,
+ "seconds": 34.7,
  "seeds": [
   17
  ],

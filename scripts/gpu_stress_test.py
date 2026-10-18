@@ -157,8 +157,11 @@ def main(argv):
 
 
 if __name__ == "__main__":
+    _spx = REPO / "data" / "external" / "spx_daily_library.csv"   # history() reads it when present (audit D24)
     with manifest.run("gpu_stress_test", sys.argv[1:], REPO / "results" / "manifests", REPO,
-                      ("scripts/gpu_stress_test.py",), deterministic=False) as run:
+                      ("scripts/gpu_stress_test.py",), deterministic=False,
+                      inputs={"spx": _spx} if _spx.exists() else None,
+                      settings={} if _spx.exists() else {"history": "synthetic Student-t(4), seed 1"}) as run:
         rc = main(sys.argv[1:])
     print(f"run manifest: results/manifests/{run['path'].name}")
     sys.exit(rc)

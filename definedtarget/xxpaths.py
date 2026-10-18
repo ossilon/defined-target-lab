@@ -123,7 +123,7 @@ def _xx(seed, path0, npaths, drift, vsd, times, S0, kinds, signs, strikes, units
                                     S0) * s_now / nav
                 s_prev = s_now
                 n_prev = nav
-                if nav > hi:
+                if nav >= hi:                            # at the high is not below it (audit of v0.3.0, D16)
                     hi = nav
                     spell = 0
                 else:
@@ -174,6 +174,14 @@ def simulate(seed, npaths, fund, market, S0, times, realized_vol, implied_vol, s
     t = np.asarray(times, dtype=np.float64)
     if abs(t[-1] - market.horizon) > 1e-12:
         raise ValueError("the time grid must end at the fund's target date (market.horizon)")
+    # Refuse numbers that would turn into NaN NAVs and silently zero drawdowns (audit of v0.3.0, D15)
+    finite = [("S0", S0), ("implied_vol", implied_vol), ("slide", slide), ("cash", fund.cash), ("fee", fund.fee),
+              ("rate", market.rate), ("div_yield", market.div_yield)] + \
+             [(f"leg {i} strike", leg.strike) for i, leg in enumerate(fund.legs)] + \
+             [(f"leg {i} units", leg.units) for i, leg in enumerate(fund.legs)]
+    bad = [name for name, v in finite if not math.isfinite(v)]
+    if bad or not S0 > 0 or not implied_vol >= 0 or not fund.fee >= 0:
+        raise ValueError(f"invalid fund or pricing input(s): {bad or 'S0 must be > 0, implied_vol and fee >= 0'}")
     mu = market.rate - market.div_yield if mu is None else mu
     drift, vsd, check, _ = lp.prepare(seed, npaths, t, mu, realized_vol, None, checkpoints, path0, stream)
     kinds, signs, strikes, units = fund_arrays(fund)

@@ -33,9 +33,18 @@ check("each target is the next origin (months chain without gaps)", all(o[i][1] 
 raises("a close that is not an origin is refused", lambda: fc.target_for(date(2026, 10, 29)), "not an FC1 origin")
 check("seed = year x 100 + month", fc.seed_for(date(2026, 10, 30)) == 202610)
 check("deadline: two sessions after Fri 2026-10-30 is Tue 2026-11-03", fc.deadline(date(2026, 10, 30)) == date(2026, 11, 3))
-check("on time until the end of the deadline day in New York (2026-11-04 04:59 UTC = 23:59 EST)",
-      not fc.is_late(date(2026, 10, 30), datetime(2026, 11, 4, 4, 59, tzinfo=timezone.utc))
-      and fc.is_late(date(2026, 10, 30), datetime(2026, 11, 4, 5, 0, tzinfo=timezone.utc)))
+check("on time until the END OF THE SESSION on the deadline day (rule 7; 16:00 New York = 21:00 UTC in November)",
+      not fc.is_late(date(2026, 10, 30), datetime(2026, 11, 3, 20, 59, tzinfo=timezone.utc))
+      and fc.is_late(date(2026, 10, 30), datetime(2026, 11, 3, 21, 1, tzinfo=timezone.utc)))
+check("early closes (13:00): the day after Thanksgiving and Christmas Eve 2026; July 3 2026 is a holiday, not one",
+      fc.is_early_close(date(2026, 11, 27)) and fc.is_early_close(date(2026, 12, 24))
+      and not fc.is_early_close(date(2026, 7, 3)) and not fc.is_early_close(date(2026, 11, 30))
+      and fc.close_time(date(2026, 11, 27)).hour == 13 and fc.close_time(date(2026, 11, 30)).hour == 16)
+early = sorted({fc.deadline(c) for t, T in o for c in (t, T) if fc.is_early_close(fc.deadline(c))})
+check("one FC1 deadline is an early close: 2029-07-03 (the day before Independence Day) ends at 13:00 New York",
+      early == [date(2029, 7, 3)] and fc.close_time(date(2029, 7, 3)).hour == 13
+      and fc.is_late(date(2029, 6, 29), datetime(2029, 7, 3, 17, 1, tzinfo=timezone.utc))
+      and not fc.is_late(date(2029, 6, 29), datetime(2029, 7, 3, 16, 59, tzinfo=timezone.utc)), early)
 
 # ------------------------------------------------------------------ made-up inputs (the README's 2026-10-13 example)
 INP = fc.Inputs(date(2026, 10, 30), 778.01, 0.166, 0.0486498, 882.2603, 3.2, 995.01, 0.48, 0.2474, 22.0)
@@ -141,3 +150,125 @@ check("summary: n 5 (the void skipped), mean 0.514, 3 of 5 inside 25-75%, 4 of 5
       r["n"] == 5 and abs(r["mean"] - 0.514) < 1e-12 and r["in50"][0] == 0.6 and r["in90"][0] == 0.8
       and sum(r["histogram"]) == 5)
 check("the Wilson interval brackets the share", r["in50"][1] < 0.6 < r["in50"][2])
+
+# ------------------------------------------------------------------ fixes from the external audit of v0.3.0
+nan = float("nan")
+# D01: a missing or invalid number is refused, never scored or written
+for label, args in (("a blank (NaN) target NAV", (26.0, nan, 778.01, 790.0)), ("a zero NAV", (26.0, 0.0, 778.01, 790.0)),
+                    ("a negative SPY close", (26.0, 27.0, 778.01, -1.0))):
+    raises(f"scoring refuses {label}", lambda a=args: fc.score(record, *a), "missing or invalid")
+with tempfile.TemporaryDirectory() as tmp:
+    log = Path(tmp) / "log.jsonl"
+    fc.append_log(fc.forecast_entry(record, code={}), log, now=datetime(2026, 11, 2, 15, tzinfo=timezone.utc))
+    raises("the log refuses to write a NaN (allow_nan=False)", lambda: fc.append_log(
+        fc.outcome_entry(record, {"M1": {"xx": nan, "spy": 0.5}}), log,
+        now=datetime(2026, 12, 2, 15, tzinfo=timezone.utc)), "json compliant")
+    check("... and nothing was written, so the month can still be recorded", len(fc.read_log(log)) == 1)
+    # D03: no entry before its session has ended
+    raises("a forecast entry before the origin's session ends is refused (2026-10-30 15:00 New York)", lambda:
+           fc.append_log(fc.forecast_entry(dict(record, origin="2026-10-30"), code={}), Path(tmp) / "x.jsonl",
+                         now=datetime(2026, 10, 30, 19, tzinfo=timezone.utc)), "has not ended")
+    # D19: a report after every 12 outcome entries, once, holding PITs and summaries only
+    rlog = Path(tmp) / "r.jsonl"
+    for t_, T_ in fc.origins()[:12]:
+        rec_ = dict(record, origin=t_.isoformat(), target=T_.isoformat())
+        fc.append_log(fc.forecast_entry(rec_, code={}), rlog, now=datetime(2030, 2, 1, tzinfo=timezone.utc))
+        fc.append_log(fc.outcome_entry(rec_, {m: {"xx": 0.5, "spy": 0.5} for m in fc.MODELS}), rlog,
+                      now=datetime(2030, 2, 1, tzinfo=timezone.utc))
+    check("due lists rule 9's report after 12 outcome entries", ("report", 12, None, None, False) in fc.due(date(2030, 2, 1), rlog))
+    rep = fc.append_log(fc.report_entry(fc.read_log(rlog)), rlog, now=datetime(2030, 2, 1, tzinfo=timezone.utc))
+    check("the report entry holds the summary of all 12, and no NAV or return", rep["outcomes"] == 12
+          and rep["summary"]["M1/xx"]["n"] == 12 and "nav" not in json.dumps(rep).lower())
+    check("... and then no report is due", not any(k == "report" for k, *_ in fc.due(date(2030, 2, 1), rlog)))
+    raises("the same report twice is refused", lambda: fc.append_log(fc.report_entry(fc.read_log(rlog)), rlog), "once")
+
+# D01, D02, D04 through the command itself, on a made-up data folder
+import importlib.util  # noqa: E402
+import os  # noqa: E402
+
+spec = importlib.util.spec_from_file_location("forecast_check_cli", Path(fc.REPO) / "scripts" / "forecast_check.py")
+cli = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(cli)
+
+
+def data_folder(root, nav_T="27", split=False):
+    (root / "tables").mkdir(parents=True, exist_ok=True)
+    tau = (fc.EXPIRY - date(2026, 10, 30)).days / 365
+    (root / "tables" / "xx_model_daily.csv").write_text(
+        "as_of,spot,iv_disc_0bp,zero_rate_T,forward,tau,options_per_share\n"
+        f"2026-10-30,778.01,0.166,0.0486,882.0,{tau},0.48\n2026-11-30,790.0,0.166,0.0486,890.0,3.1,0.48\n",
+        encoding="utf-8")
+    later = "2026-11-30,995.01,2030-01-10,0.4948,{},0.0096,50000\n" if split else "2026-11-30,995.01,2030-01-10,0.2474,{},0.0048,100000\n"
+    (root / "tables" / "xx_state.csv").write_text(
+        "as_of,strike,expiry,cash_per_share,nav_published,contracts_per_share,shares_outstanding\n"
+        "2026-10-30,995.01,2030-01-10,0.2474,26,0.0048,100000\n" + later.format(nav_T), encoding="utf-8")
+
+
+def args(**kw):
+    from types import SimpleNamespace
+    return SimpleNamespace(**{"origin": "2026-10-30", "void": None, "no_events": False, "dry_run": True,
+                              "target": None, "paths": fc.PATHS,
+                              "now": datetime(2026, 12, 2, 15, tzinfo=timezone.utc), **kw})
+
+
+old_env = os.environ.get("DEFINEDTARGET_DATA")
+def q(fn, *a):
+    """Run a command without its printout, so only the checks print."""
+    import contextlib
+    import io
+    with contextlib.redirect_stdout(io.StringIO()):
+        return fn(*a)
+
+
+try:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        rec0 = dict(record, origin="2026-10-30", target="2026-11-30")
+        for case, nav_T, split in (("blank", "", False), ("split", "54", True), ("normal", "27", False)):
+            root = tmp / case
+            data_folder(root / "data", nav_T, split)
+            os.environ["DEFINEDTARGET_DATA"] = str(root / "data")
+            store = root / "store"
+            store.mkdir()
+            (store / "FC1_2026-10-30.json").write_bytes(fc.canonical(rec0))
+            log = root / "log.jsonl"
+            fc.append_log(fc.forecast_entry(rec0, code={}), log, now=datetime(2026, 11, 2, 15, tzinfo=timezone.utc))
+            if True:
+                if case == "blank":
+                    raises("D01: the command refuses a blank target NAV (nothing recorded)",
+                           lambda: q(cli.cmd_outcome, args(no_events=True), log, store), "missing or invalid")
+                    check("... and the month can still be recorded later", len(fc.read_log(log)) == 1)
+                elif case == "split":
+                    check("D02: a reverse split between the closes blocks scoring, even with --no-events",
+                          q(cli.cmd_outcome, args(no_events=True), log, store) == 2 and len(fc.read_log(log)) == 1)
+                    check("... and found the event in the data", any("reverse split" in e for _, e in
+                                                                    fc.events_between(date(2026, 10, 30), date(2026, 11, 30))))
+                    rc = q(cli.cmd_outcome, args(void="1-for-2 reverse split (made-up notice)"), log, store)
+                    last = fc.read_log(log)[-1]
+                    check("... and --void records the void with its reason and no PIT", rc == 0 and "void" in last
+                          and "pit" not in last)
+                else:
+                    check("D02: without --no-events (the operator's review) nothing is scored",
+                          q(cli.cmd_outcome, args(), log, store) == 2 and len(fc.read_log(log)) == 1)
+                    rc = q(cli.cmd_outcome, args(no_events=True), log, store)
+                    last = fc.read_log(log)[-1]
+                    check("... with it, the PITs are recorded with the review", rc == 0 and "pit" in last
+                          and "operator confirmed" in last["events_review"])
+        # D04: a saved forecast whose log write failed is logged on the next run, from its saved bytes
+        root = tmp / "orphan"
+        data_folder(root / "data")
+        os.environ["DEFINEDTARGET_DATA"] = str(root / "data")
+        store, log = root / "store", root / "log.jsonl"
+        store.mkdir()
+        (store / "FC1_2026-10-30.json").write_bytes(fc.canonical(rec0))
+        rc = q(cli.cmd_forecast, args(), log, store)
+        rc2 = q(cli.cmd_forecast, args(), log, store)
+        check("D04: an orphaned saved forecast is logged once from its saved bytes, then refused",
+              rc == 0 and rc2 == 2 and fc.read_log(log)[0]["forecast_sha256"] == fc.fingerprint(rec0))
+finally:
+    if old_env is None:
+        os.environ.pop("DEFINEDTARGET_DATA", None)
+    else:
+        os.environ["DEFINEDTARGET_DATA"] = old_env
+check("D06: the forecast entry fingerprints the loaded input code too (parse, fetch, marks)",
+      {"definedtarget/forward/parse.py", "definedtarget/forward/fetch.py"} <= set(fc.code_fingerprints()))

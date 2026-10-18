@@ -4,9 +4,10 @@ Plain words
 - A "rule" here is any function that reads a series (rows = sessions, oldest first) and returns one output per
   session: a signal, an exposure, a running measure. Output k is the decision made at session k's close, so it may
   depend on rows 0..k and nothing later.
-- `check` proves that the way it can be proven from outside: at cut points k, it replaces everything after k with
+- `check` tests that from outside (it cannot prove it; audit of v0.3.0, D11): at cut points k, it replaces everything after k with
   different futures and requires outputs 0..k to stay identical, bit for bit. A rule that reads even one future row
-  changes some output at or before its cut, and the check reports where.
+  changes some output at or before its cut, and the check reports where. An empty result means none was found at
+  the cuts and futures tried: a rule can still peek at an untried cut or for a future unlike all eight.
 - The futures (FUTURES): the rest reversed, shuffled, flat (the last known row repeated), a crash and a spike (ten
   spreads below and above the mean), unrelated noise, no future at all (the series ends at k) and a longer one
   (twice the rows). Harsh futures catch rules that peek only when something extreme is coming; the two lengths

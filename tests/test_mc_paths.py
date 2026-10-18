@@ -157,6 +157,26 @@ for bad_barrier in (nan, 0.0, -1.0, float("inf")):
 raises("a fractional checkpoint is refused (not truncated)",
        lambda: paths.lognormal(1, 1, [0, 0.1, 0.2], 0.0, 0.2, checkpoints=[1.5]), "whole step numbers")
 from definedtarget.montecarlo import bootstrap as _bs  # noqa: E402
+from definedtarget.montecarlo import stats as _st  # noqa: E402
+from definedtarget.montecarlo import stream as _sm  # noqa: E402
+from definedtarget.montecarlo import manifest as _mf  # noqa: E402
+# Fixes from the external audit of v0.3.0
+raises("D23: a history with no columns is refused (the kernel reads column 0)",
+       lambda: _bs.paths(1, 2, 1, np.empty((2, 0)), 1), "1 column")
+check("D22: Wilson's interval reaches exactly 0 at 0 hits and exactly 1 at n hits",
+      _st.wilson(0, 10)[1] == 0.0 and _st.wilson(13, 13)[2] == 1.0 and 0 < _st.wilson(3, 10)[1] < 0.3)
+_calls = []
+_m, _rep = _sm.run_to_precision(lambda p, n: (_calls.append(n), (np.arange(p, p + n) % 2).astype(float))[1], 0.001,
+                                pilot=1000, chunk=10, max_paths=100)
+check("D08: the pilot obeys max_paths and the chunk size", _m.n == 100 and max(_calls) <= 10, (_m.n, max(_calls)))
+raises("D08: a target standard error of 0 is refused", lambda: _sm.run_to_precision(lambda p, n: np.zeros(n), 0.0),
+       "target_se")
+_v, _info = _sm.order_statistics(lambda p, n: np.zeros(n), 1_000_000, [500_000], chunk=10_000)
+check("D07: an atom (one million zero payoffs) costs one kept value, not a million, and the median is exact",
+      _v[500_000] == 0.0 and _info["kept_values"] == 1, _info)
+check("D18: a Windows path keeps only its file name on any system",
+      _mf._public_arg("C:" + chr(92) + "Users" + chr(92) + "someone" + chr(92) + "prices.csv") == "prices.csv"
+      and _mf._public_arg("/" + "home" + "/someone/prices.csv") == "prices.csv")   # split: the scan reads this file
 raises("the bootstrap refuses a NaN barrier too", lambda: _bs.paths(1, 1, 2, np.ones((5, 1)) * 0.01, 2, barrier=nan),
        "barrier must be")
 raises("the bootstrap refuses a fractional checkpoint", lambda: _bs.paths(1, 1, 2, np.ones((5, 1)) * 0.01, 2,

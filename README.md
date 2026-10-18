@@ -108,7 +108,7 @@ The code here computes each fact from the issuer's public daily files and public
 | **Verdicts**: computes each prediction's verdict from its frozen rule (provisional numbers before its review date); records a verdict only when asked | `py -I scripts/verdicts.py` |
 | **Monte Carlo engine** (v0.3): seeded paths on the real trading calendar (lognormal or blocks of real S&P 500 history), on the CPU or an optional GPU, with error bars, exact-answer tests, no look-ahead and a run manifest for every study. It imports nothing XX-specific. Its interface stays provisional until v0.3.3: names and arguments may change. | `definedtarget.montecarlo` ([how it works and how to use it](docs/learn/06-the-monte-carlo-engine.md)) |
 | **XX path studies** (v0.3): what a holder lives through path by path (drawdowns, time below the price paid, the odds of reaching 2x / 5x / 10x), the volatility rule on real paths since 2007, and history's shape against the bell curve | `py -I scripts/xx_paths_study.py`, `slide_rule_test.py`, `effective_leverage_study.py`, `bootstrap_study.py` (FINDINGS F15-F19) |
-| **Monthly forecast check** (v0.3, protocol FC1): the engine forecasts XX one month ahead under four models; a month later the log records where the real outcome landed | `py -I scripts/forecast_check.py due`, then `forecast` / `outcome` |
+| **Monthly forecast check** (v0.3, protocol FC1): the engine forecasts XX one month ahead under four models; a month later the log records where the real outcome landed | `py -I scripts/forecast_check.py due`, then `forecast`; a month later `outcome --no-events` after reviewing the issuer's notices (or `--void "..."`); `report` when `due` lists one |
 | **Plain-English explainers** | [docs/learn/](docs/learn/01-what-is-a-call.md) |
 
 

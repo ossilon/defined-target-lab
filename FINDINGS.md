@@ -387,13 +387,16 @@ points: real VIX1Y moves 3.5 times as much as the slide rule, cushions the crash
 2026-10-17 (`scripts/slide_rule_test.py`; outputs fixed in the script before the run; S&P 500 closes and Cboe VIX1Y,
 2007-01-03 to 2026-10-09; 198 synthetic XXs started every 21 sessions, each with 815 real sessions of life, about 6
 separate spans; XX's shape, cash and fee; rate and dividend yield held constant; all three markings start at
-0.77 x VIX1Y on the start day, 0.77 being the design review's implied-vol / VIX1Y multiplier, an assumption):
+0.77 x VIX1Y on the start day, 0.77 being the design review's implied-vol / VIX1Y multiplier, an assumption).
+Corrected 2026-10-18 after an independent external audit of v0.3.0: the first run gave each synthetic XX half of
+XX's cash weight (0.45% instead of 0.94% at the start); the table below is the corrected run. The correction moved
+drawdowns by 0.3-0.4 points and peaks by 0.01-0.02x; the gaps and the measured slide did not change:
 
 | Marking | Largest NAV drawdown: median / 90th pct | Longest underwater (sessions): median / 90th | Highest NAV / start: median / 90th | Touched 2x |
 |---|---|---|---|---|
-| A constant vol | 91.5% / 99.7% | 460 / 752 | 2.68 / 6.48 | 69.2% |
-| B slide rule, 1 point per -10% | 91.7% / 99.7% | 464 / 765 | 2.53 / 6.48 | 65.2% |
-| C real VIX1Y x 0.77 | 84.0% / 99.6% | 464 / 757 | 2.52 / 6.50 | 70.7% |
+| A constant vol | 91.2% / 99.4% | 460 / 752 | 2.67 / 6.46 | 69.2% |
+| B slide rule, 1 point per -10% | 91.3% / 99.4% | 464 / 765 | 2.52 / 6.46 | 65.2% |
+| C real VIX1Y x 0.77 | 83.7% / 99.3% | 464 / 757 | 2.51 / 6.47 | 70.2% |
 
 Start by start, the largest drawdown under B and C differs by a median 3.3 points (90th percentile 13.0), and the
 peak by 0.04x (0.37x); A against C: 2.7 (14.7) points and 0.07x (0.28x). The slide rule is no closer to the
@@ -401,9 +404,9 @@ VIX1Y-marked life than constant vol is. Measured on these data, 0.77 x VIX1Y ris
 (daily changes; 3.27 over 63 sessions), against the rule's 1.00, consistent with F12's 4.6 points for VIX1Y itself.
 
 What it says about the F17 mystery: in the long rallies vol fell as the S&P rose, and both moving-vol markings peak
-lower than constant vol (median 2.52-2.53x against 2.68x): the mechanism behind F17's mid-life gap (a cut to vol
+lower than constant vol (median 2.51-2.52x against 2.67x): the mechanism behind F17's mid-life gap (a cut to vol
 when the option is most sensitive to it) appears on real paths too. In the crashes vol spiked and cushioned the
-mark (median drawdown 84% against 92%). Which vol is right for XX's own option is still open: F12 found the listed
+mark (median drawdown 84% against 91%). Which vol is right for XX's own option is still open: F12 found the listed
 3-year strike vol moving about 1 point per -10%, far less than VIX1Y; the frozen hypotheses H4 and H10 test the
 vendor's marks directly.
 

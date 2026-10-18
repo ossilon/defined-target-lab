@@ -101,6 +101,8 @@ for f in sorted(PKG.glob("*.py")):
             bad += [f"{f.name}: {a.name}" for a in node.names if a.name.split(".")[0] not in allowed]
         elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module.split(".")[0] not in allowed:
             bad.append(f"{f.name}: from {node.module}")
+        elif isinstance(node, ast.ImportFrom) and node.level >= 2:   # "from .. import x" leaves montecarlo (D21)
+            bad.append(f"{f.name}: from {'.' * node.level}{node.module or ''}")
 check("montecarlo imports nothing else from definedtarget or elsewhere (other projects can import it as is)", not bad, bad)
 
 # 7. The GPU twin: same words, same uniforms, normals to the last digit or so

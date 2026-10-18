@@ -105,8 +105,13 @@ def run(root=None, report_dir=None, now=None, capture=True):
         try:
             from . import forecast
             for kind, t, close, dl, late in forecast.due(now.astimezone(forecast.NEW_YORK).date()):
+                if kind == "report":
+                    notes.append(f"FC1 report due after {t} outcome entries: py -I scripts\\forecast_check.py report")
+                    continue
                 msg = (f"FC1 {kind} for origin {t} (close {close}) {'is past its deadline ' if late else 'is due by '}"
-                       f"{dl}: py -I scripts\\forecast_check.py {kind} --origin {t}")
+                       f"the end of {dl} (16:00 New York): py -I scripts\\forecast_check.py {kind} --origin {t}"
+                       + (" --no-events (after reviewing the issuer's notices) or --void \"...\""
+                          if kind == "outcome" else ""))
                 (stops if late else notes).append(msg)
         except (ValueError, FileNotFoundError) as err:
             stops.append(f"forecast check refused: {err}")

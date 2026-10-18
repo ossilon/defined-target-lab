@@ -1,16 +1,16 @@
 {
  "argv": [],
  "code": {
-  "definedtarget/__init__.py": "c29f6b29683e2bb18635a494a737d9ca044ce7968ba7f80d006db9d354b565c5",
+  "definedtarget/__init__.py": "2c426c070e22a09e2a7bb68eae6e89c9093fb2f457b0cb418973946927c2e069",
   "definedtarget/forward/__init__.py": "d4ceb70576e51c3247661d9a9b45147e3ead31fbe660874d6e957de2c7ba1b07",
   "definedtarget/forward/fetch.py": "cab688f2ef3fbb4d26cccf99ddf3cada5846dbd53cafa17a309f0e2396892aef",
   "definedtarget/forward/parse.py": "f641fc3a763e1dbf5befb190d4cee03babedf06cbceaf7598e3aebc5f4777d27",
-  "definedtarget/montecarlo/__init__.py": "9d9361aaa6b676dbbb25e5444b7ec2279006800168935dda0b76c9df51ac7998",
-  "definedtarget/montecarlo/manifest.py": "abcbb9431326bfdc5fa675d1df637502dc094d762f81e306d51c8bb40cb45481",
+  "definedtarget/montecarlo/__init__.py": "1071aaadf944453a4820991835c86577f83918dc2b146c375e85ef5e8adcd339",
+  "definedtarget/montecarlo/manifest.py": "8b3c98f60d3dddc49053835191274a139b31241de4b806b76ef12b377e84f807",
   "definedtarget/montecarlo/rng.py": "fcce8bb63e35a00ad7c7b36fddf3a7e347963c603d0f4c8147b32a718a251ebc",
   "definedtarget/pricing.py": "13854e1285404bc4730f66cc5a9c92aeb4c3bde3270aacc87f7cb4cd759779d4",
   "definedtarget/sim.py": "27e77a0b5fa23bbeca5c164219c44f22876b4a278fd8b22138b4e32f4c1c7a74",
-  "scripts/slide_rule_test.py": "ffe105450f3a535ce9da938c432ff6db9994c83578a938d8ddf7325ad00be426"
+  "scripts/slide_rule_test.py": "c58bf05ae3ef1898acf02a7489a784be6afee2475531b19278784df7c4ca54fe"
  },
  "date_utc": "2026-10-18",
  "deterministic": true,
@@ -30,7 +30,7 @@
  "name": "slide_rule_test",
  "output": {
   "lines": 15,
-  "sha256": "4ab52ccf99b12c1623da28599f3e487d877accbd02990198461a7b3cf0318220"
+  "sha256": "ae894b5f0de126d34187e8823f06f1fe11e42860ad8a428f20ded672eaacc3c8"
  },
  "seconds": 0.5,
  "seeds": [],
@@ -38,7 +38,8 @@
   "every": 21,
   "life": 815,
   "m": 0.77,
-  "slide": 0.01
+  "slide": 0.01,
+  "vix1y_fetched_utc_date": "2026-10-14"
  },
  "versions": {
   "numba": "0.68.0",

@@ -4,7 +4,7 @@ It imports nothing else from definedtarget, so other projects can import it unch
 - rng: counter-based random numbers (Philox4x32-10) and the AS241 inverse normal, on the CPU (numba, all threads);
 - stats: mergeable moments, Wilson intervals, percentile intervals;
 - paths: lognormal paths on any time grid, with one-pass path measures;
-- stream: fixed-memory results for any number of paths (histograms, exact percentiles, run to a precision);
+- stream: little-memory results for any number of paths (histograms, exact percentiles, run to a precision);
 - bootstrap: the circular stationary bootstrap of real history;
 - gpu: the same numbers and path kernels on an NVIDIA GPU (optional, needs CuPy);
 - causal: the look-ahead checker for rules; manifest: run manifests for reproducible results.
