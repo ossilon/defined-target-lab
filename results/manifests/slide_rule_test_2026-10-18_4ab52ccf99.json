@@ -1,0 +1,51 @@
+{
+ "argv": [],
+ "code": {
+  "definedtarget/__init__.py": "f78f770298d8304c58d06edeb01f0d623e3b12c5a60104ca5a4444e1963174cc",
+  "definedtarget/forward/__init__.py": "d4ceb70576e51c3247661d9a9b45147e3ead31fbe660874d6e957de2c7ba1b07",
+  "definedtarget/forward/fetch.py": "cab688f2ef3fbb4d26cccf99ddf3cada5846dbd53cafa17a309f0e2396892aef",
+  "definedtarget/forward/parse.py": "f641fc3a763e1dbf5befb190d4cee03babedf06cbceaf7598e3aebc5f4777d27",
+  "definedtarget/montecarlo/__init__.py": "9d9361aaa6b676dbbb25e5444b7ec2279006800168935dda0b76c9df51ac7998",
+  "definedtarget/montecarlo/manifest.py": "abcbb9431326bfdc5fa675d1df637502dc094d762f81e306d51c8bb40cb45481",
+  "definedtarget/montecarlo/rng.py": "fcce8bb63e35a00ad7c7b36fddf3a7e347963c603d0f4c8147b32a718a251ebc",
+  "definedtarget/pricing.py": "13854e1285404bc4730f66cc5a9c92aeb4c3bde3270aacc87f7cb4cd759779d4",
+  "definedtarget/sim.py": "27e77a0b5fa23bbeca5c164219c44f22876b4a278fd8b22138b4e32f4c1c7a74",
+  "scripts/slide_rule_test.py": "fe38bc6a8dfa5754485bcfac2a61a9553621cd183848d437c0d23e2a3e005ea8"
+ },
+ "date_utc": "2026-10-18",
+ "deterministic": true,
+ "inputs": {
+  "spx": {
+   "bytes": 408692,
+   "file": "spx_daily_library.csv",
+   "sha256": "4450e969c82aece0897bc026553508a439338e00cd73be834dd8cc96c5e7c0f7"
+  },
+  "vix1y": {
+   "bytes": 253495,
+   "file": "VIX1Y_History.csv",
+   "sha256": "5ef04e990f401099861011873e087ccc9d495185caf0b3708b745b226d4d44b9"
+  }
+ },
+ "kind": "run manifest",
+ "name": "slide_rule_test",
+ "output": {
+  "lines": 15,
+  "sha256": "4ab52ccf99b12c1623da28599f3e487d877accbd02990198461a7b3cf0318220"
+ },
+ "seconds": 0.5,
+ "seeds": [],
+ "settings": {
+  "every": 21,
+  "life": 815,
+  "m": 0.77,
+  "slide": 0.01
+ },
+ "versions": {
+  "numba": "0.68.0",
+  "numpy": "2.5.3",
+  "pandas": "3.0.6",
+  "python": "3.13.15",
+  "scipy": "1.18.1",
+  "system": "Windows"
+ }
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cboe FLEX execution reports for XX (BACKLOG B21).  From the repository folder:
+"""Cboe FLEX execution reports for XX.  From the repository folder:
 
     py -I scripts\\capture_flex.py             download any missing daily reports, then rebuild XX's fills table
     py -I scripts\\capture_flex.py --extract   rebuild the table only (no downloads)

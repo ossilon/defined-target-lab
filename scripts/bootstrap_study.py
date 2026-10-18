@@ -92,7 +92,9 @@ def part_a(dates, r, npaths, nsteps):
         seg = cum[i:i + nsteps + 1] - cum[i]
         w_mdd[i] = float((np.maximum.accumulate(seg) - seg).max())
     print(f"Part A: build {dates[0]} to 1999-12-31 ({build.size:,} days); test 2000 onward ({test.size:,} days, "
-          f"{w_ret.size:,} overlapping windows of {nsteps} sessions, about {test.size / nsteps:.1f} separate)\n")
+          f"{w_ret.size:,} overlapping windows of {nsteps} sessions, about {test.size / nsteps:.1f} separate)")
+    print(f"annualized volatility (daily sd x sqrt(252)): build {build.std() * math.sqrt(252):.1%}, "
+          f"test {test.std() * math.sqrt(252):.1%}\n")
     gens = [("lognormal (build mean, spread)", None)] + [(f"bootstrap, mean block {b}", b) for b in BLOCKS]
     m, s = build.mean(), build.std()
     print("| generator | windows below p10 / above p90: return | median percentile | windows below p10 / above "
@@ -157,7 +159,7 @@ def main(argv):
     spx_path = Path(a.spx) if a.spx else REPO / "data" / "external" / "spx_daily_library.csv"
     fr_path = find("F-F_Research_Data_Factors_daily.csv", a.french)
     with manifest.run("bootstrap_study", argv, REPO / "results" / "manifests", REPO,
-                      ("definedtarget/**/*.py", "scripts/bootstrap_study.py"), seeds=[SEED],
+                      ("scripts/bootstrap_study.py",), seeds=[SEED],
                       inputs={"spx": spx_path, "french": fr_path}, settings={"paths": a.paths, "blocks": BLOCKS}) as m:
         d_spx, r_spx = load_spx(spx_path)
         d_fr, r_fr = load_french(fr_path)

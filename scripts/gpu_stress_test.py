@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GPU stress test with the engine's own kernels (BACKLOG B27).  From target_funds/:
+"""GPU stress test with the engine's own kernels.  From target_funds/:
 
     py -I scripts\\gpu_stress_test.py [--minutes 5] [--stop-temp 83]
 
@@ -158,7 +158,7 @@ def main(argv):
 
 if __name__ == "__main__":
     with manifest.run("gpu_stress_test", sys.argv[1:], REPO / "results" / "manifests", REPO,
-                      ("definedtarget/**/*.py", "scripts/gpu_stress_test.py"), deterministic=False) as run:
+                      ("scripts/gpu_stress_test.py",), deterministic=False) as run:
         rc = main(sys.argv[1:])
     print(f"run manifest: results/manifests/{run['path'].name}")
     sys.exit(rc)

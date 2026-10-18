@@ -31,9 +31,9 @@ for the expected highest close, the reflection principle for the chance of touch
 within allowances fixed before the run.
 
 **4. A billion paths in fixed memory.** The engine never stores all paths. It merges running totals and fine
-histograms and finds exact percentiles with a second pass. On the test machine, the option's value to a standard
-error of 0.004 took 1.03 billion paths in 30 s (54.67715 against the formula's 54.67744), and the exact median of a
-billion end prices took 51 s while keeping 235,112 values. `run_to_precision` picks the path count for a target
+histograms and finds exact percentiles with a second pass. On the test machine (`scripts/billion_paths_demo.py`),
+the option's value to a standard error of 0.004 took 1.10 billion paths in 29 s (54.67960 against the formula's
+54.67744), and the exact median of a billion end prices took 57 s while keeping 191,183 values. `run_to_precision` picks the path count for a target
 error, so "how accurate" replaces "how many paths".
 
 **5. Real history, not only the bell curve.** The bootstrap builds futures from blocks of real S&P 500 days (the
@@ -53,7 +53,8 @@ covers those.
 **7. Reproducible results.** Each study script writes a run manifest to `results/manifests/`: its arguments,
 seeds, the fingerprint (SHA-256) of every input file and code file, the library versions, and the fingerprint of
 everything it printed. Run it again on the same inputs and code, and the output fingerprint must match
-(`manifest.same_output`). The four published studies (F15, F17, F18, F19) reproduce this way.
+(`manifest.same_output`). The four published studies (F15, F17, F18, F19) reproduce this way. A manifest
+fingerprints only the code the run loaded, so an unrelated change elsewhere does not mark it stale.
 
 ## Speed
 
@@ -70,7 +71,8 @@ module loads only if CuPy and an NVIDIA card are present; everything runs withou
 
 ## Try it
 
-From the repository folder (or after `pip install .`):
+The interface is provisional until v0.3.3: function names and arguments may change before then. From the
+repository folder (or after `pip install .`):
 
 ```python
 import math
@@ -92,7 +94,8 @@ It prints P(finish above) 0.2909 (95% interval 0.2900 to 0.2917) and P(touch at 
 
 ## What it found so far
 
-- **F15**: real history's shape lowers XX's model value 13-24% against the bell curve at the same daily volatility.
+- **F15**: post-1950 S&P 500 history's shape lowers XX's model value 13-24% against the bell curve at the same daily
+  volatility; history since 1926, with the 1930s, gives +6% to -14%.
 - **F17**: XX doubles at some point in about half of all futures but ends up in about a quarter (risk-neutral).
 - **F18**: real one-year index volatility moves 3.5 times as much as the simulator's "vol follows the index" rule;
   the choice changes XX's drawdowns and peaks by several points.

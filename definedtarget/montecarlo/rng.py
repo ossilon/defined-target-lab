@@ -127,6 +127,9 @@ def _fill(seed, path0, npaths, ndraws, stream, as_normal, out):
 
 
 def _check(seed, path0, npaths, ndraws, stream):
+    # whole numbers only: a float seed or path (1.5) would be truncated silently by the uint64 conversion (audit)
+    if not all(isinstance(v, (int, np.integer)) and not isinstance(v, bool) for v in (seed, path0, npaths, ndraws, stream)):
+        raise ValueError("seed, path0, npaths, ndraws and stream must be whole numbers (int)")
     if not (0 <= seed < 2 ** 64 and 0 <= path0 and path0 + npaths <= 2 ** 64 and 0 <= stream < 2 ** 32):
         raise ValueError("seed and path numbers must fit in 64 bits, the stream in 32 bits, all non-negative")
     if npaths < 0 or ndraws < 0 or (ndraws + 1) // 2 > 2 ** 32:

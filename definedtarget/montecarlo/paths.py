@@ -83,10 +83,13 @@ def prepare(seed, npaths, times, mu, vol, barrier=None, checkpoints=(), path0=0,
     """Checked kernel inputs (step drifts, step spreads, checkpoint steps, log barrier); shared with montecarlo.gpu so
     the CPU and GPU kernels receive identical numbers."""
     t = np.asarray(times, dtype=np.float64)
-    if t.ndim != 1 or t.size < 2 or t[0] != 0.0 or np.any(np.diff(t) <= 0):
-        raise ValueError("times must start at 0 and increase strictly")
-    if vol <= 0:
-        raise ValueError("vol must be positive")
+    # "not x > 0" rather than "x <= 0", so NaN is refused too (audit: NaN inputs used to return all-NaN measures)
+    if t.ndim != 1 or t.size < 2 or not np.isfinite(t).all() or t[0] != 0.0 or not (np.diff(t) > 0).all():
+        raise ValueError("times must be finite, start at 0 and increase strictly")
+    if not (math.isfinite(vol) and vol > 0):
+        raise ValueError("vol must be positive and finite")
+    if not math.isfinite(mu):
+        raise ValueError("mu must be finite")
     nsteps = t.size - 1
     _check(seed, path0, npaths, nsteps, stream)
     dt = np.diff(t)

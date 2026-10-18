@@ -1,4 +1,4 @@
-"""Cboe FLEX execution reports (BACKLOG B21): which days to fetch, capture, and extracting XX's option rows.
+"""Cboe FLEX execution reports: which days to fetch, capture, and extracting XX's option rows.
 
 Synthetic data only: a fake downloader and a small spreadsheet built here (no Cboe data in the repository).
 """

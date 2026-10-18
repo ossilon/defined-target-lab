@@ -64,6 +64,7 @@ class Inputs:
     options_per_share: float  # one-share options per XX share
     cash_per_share: float
     vix: float                # VIX close (index points), for M4
+    spot_source: str = ""     # where the model table's SPY close came from (the issuer's reference file, or a fallback)
 
 
 def last_session(year, month):
@@ -148,7 +149,17 @@ def make_forecast(inp, T, npaths=PATHS):
     return {"protocol": "FC1", "origin": inp.origin.isoformat(), "target": T.isoformat(), "paths": npaths,
             "seed": seed_for(inp.origin), "levels": "0.001 to 0.999 in steps of 0.001",
             "inputs": {k: (v.isoformat() if isinstance(v, date) else v) for k, v in asdict(inp).items()},
-            "models": models}
+            "models": models, "versions": _versions()}
+
+
+def _versions():
+    """Library versions behind a forecast: re-running it elsewhere reproduces the fingerprint only with the same
+    numerics (numpy, numba and the platform's maths library)."""
+    import platform
+
+    import numba
+    return {"python": platform.python_version(), "numpy": np.__version__, "numba": numba.__version__,
+            "system": platform.system()}
 
 
 def canonical(record):
@@ -164,12 +175,12 @@ def code_fingerprints(root=REPO):
 
 
 def pit_from_levels(levels, x):
-    """Share of the saved forecast below x, by linear interpolation between its 0.1% points; outside the first and
-    last point it is reported as 0.0005 / 0.9995 (below 0.001 / above 0.999)."""
+    """Share of the saved forecast below x, by linear interpolation between its 0.1% points; below the first point
+    0.0005 and above the last 0.9995 (FC1 rule 6: strictly below / above; at a point itself, interpolation)."""
     lv = np.asarray(levels, dtype=float)
-    if x <= lv[0]:
+    if x < lv[0]:
         return 0.0005
-    if x >= lv[-1]:
+    if x > lv[-1]:
         return 0.9995
     return float(np.interp(x, lv, np.asarray(LEVELS)))
 
@@ -221,7 +232,7 @@ def load_inputs(t, root=None, fetch_vix=True):
         raise ValueError(f"the latest saved VIX history has no close for {t}")
     return Inputs(t, float(m["spot"]), float(m["iv_disc_0bp"]), float(m["zero_rate_T"]), float(m["forward"]),
                   float(m["tau"]), float(s["strike"]), float(m["options_per_share"]), float(s["cash_per_share"]),
-                  vix[t])
+                  vix[t], str(m.get("spot_source", "")))
 
 
 def closes(t, root=None):
@@ -309,7 +320,7 @@ def outcome_entry(record, pits=None, void=None):
 
 
 def summary(entries):
-    """Rule 8: per model and per PIT kind, the count, the share inside the middle 50% and 90% bands (95% Wilson
+    """FC1 rule 9: per model and per PIT kind, the count, the share inside the middle 50% and 90% bands (95% Wilson
     intervals), the mean PIT and a 10-bin histogram."""
     from ..montecarlo import stats
     out = {}

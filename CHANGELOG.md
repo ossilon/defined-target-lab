@@ -2,6 +2,28 @@
 
 ## Unreleased (v0.3 in progress)
 
+The `definedtarget.montecarlo` interface is provisional until v0.3.3: names and arguments may change.
+
+### Changed after the independent pre-release audit
+The audit found no defect in the engine's results, the XX layer or the forecast check's code, and reproduced every
+published table value in FINDINGS F15, F17, F18 and F19. Fixed from its findings:
+- The README's speed line credited the SPY-path kernels' times to "XX paths"; the XX layer, which reprices the fund
+  every session, runs on the CPU only, at about 10 s per million paths.
+- Run manifests fingerprint only the code a run loaded (plus the script), so a new, unrelated file no longer makes a
+  published manifest fail `same_output`; the published manifests were regenerated.
+- Recorded sources for quoted numbers: `xx_paths_study.py` prints F17's martingale gaps (updated to its 1-million-path
+  output), `bootstrap_study.py` prints F15's two volatilities, and `scripts/billion_paths_demo.py` (seed 777) produces
+  the billion-path figures (updated). F15's headline now names post-1950 S&P history (history since 1926 gives +6% to
+  -14%); F17's touch change reads 2.7-3.8 points.
+- The engine refuses NaN or infinite vol, drift and times, a constant history in `equal_moments`, and fractional
+  seeds or path counts, instead of returning NaN or truncating.
+- `causal.check` also tries a future with no rows and one with twice the rows, so a rule that reads the series
+  length is caught.
+- The forecast check: a PIT exactly at the first or last saved point interpolates, as FC1 rule 6 says (it returned
+  0.0005 / 0.9995); the saved forecast also records the library versions and the SPY close's source; its test
+  judges the forecasts with an independent scipy formula.
+- Public code no longer cites private planning files.
+
 ### Added
 - **The monthly forecast check** (protocol FC1, frozen 2026-10-17 UTC before its first origin, 2026-10-30):
   at each month's last close the engine forecasts XX's growth to the next month's last close under four models
@@ -58,9 +80,10 @@
   Percentiles come from a 65,536-bin histogram plus one replay of the same paths (the random numbers are addressed,
   so a replay repeats them exactly); the replay keeps only the values in the needed bin and returns the same order
   statistics as a full sort, bit for bit (tested on 3 million values; it kept 7 to 1,248 of them). `run_to_precision`
-  runs until a target standard error is met or a path limit is reached, and reports which. On the test machine's CPU:
-  the option value to SE 0.004 took 1.03 billion paths in 30 s (54.67715 against Black-76 54.67744), and the exact
-  median of 1 billion end prices took 51 s while keeping 235,112 values (843.66519 against the exact 843.66528).
+  runs until a target standard error is met or a path limit is reached, and reports which. On the test machine's CPU
+  (`scripts/billion_paths_demo.py`, seed 777): the option value to SE 0.004 took 1.10 billion paths in 29 s (54.67960,
+  SE 0.00383, against Black-76 54.67744), and the exact median of 1 billion end prices took 57 s while keeping
+  191,183 values (843.67031 against the exact 843.66528).
 - **History bootstrap** (`montecarlo.bootstrap`, step 5): the circular stationary bootstrap (Politis and Romano,
   1994) builds paths from blocks of real history with random lengths of a chosen mean; several columns travel
   together; `equal_moments` gives history any chosen mean and spread, so a bootstrap and a lognormal with the same

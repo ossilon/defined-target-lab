@@ -67,6 +67,23 @@ with tempfile.TemporaryDirectory() as tmp:
     check("a changed code file is caught even when the output is the same",
           manifest.same_output(rec, manifest.read(m4["path"])) == (False, ["code differ"]))
 
+    # The code a run loads is fingerprinted automatically; a file it never loads is not (audit of v0.3: a new,
+    # unrelated module made every published manifest look stale)
+    lib = tmp / "lib"
+    lib.mkdir()
+    (lib / "used_mod_v03.py").write_bytes(b"VALUE = 42\n")
+    (lib / "unused_mod_v03.py").write_bytes(b"VALUE = 0\n")
+    sys.path.insert(0, str(lib))
+    try:
+        with manifest.run("loaded", [], out, tmp, "code/a.py") as m5:     # one pattern as a plain string
+            import used_mod_v03                                           # noqa: F401
+    finally:
+        sys.path.remove(str(lib))
+        sys.modules.pop("used_mod_v03", None)
+    code = manifest.read(m5["path"])["code"]
+    check("a module the run imported is fingerprinted, a file it never loaded is not, and a single-string pattern works",
+          "lib/used_mod_v03.py" in code and "lib/unused_mod_v03.py" not in code and "code/a.py" in code, sorted(code))
+
     before = sorted(out.iterdir())
 
     def failing():

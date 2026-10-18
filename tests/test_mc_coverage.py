@@ -1,7 +1,6 @@
 """Are the engine's error bars honest? 1,000 independent runs, each judged against a closed-form answer.
 
-Target fixed in the v0.3 depth pass (V03_DEPTH_PASS.md, rank 2) before this test first ran: across 1,000 runs, the
-95% intervals must contain the exact value between 93.2% and 96.8% of the time (the 99% band of a binomial(1000,
+Target fixed in the v0.3 design review before this test first ran: across 1,000 runs, the 95% intervals must contain the exact value between 93.2% and 96.8% of the time (the 99% band of a binomial(1000,
 0.95) count: 950 +/- 2.576 x 6.9). The pass wrote "93.6-96.4%" but called it the 99% band; the arithmetic was
 corrected to the stated 99% before any run (2026-10-17).
 

@@ -137,7 +137,11 @@ def equal_moments(steps, mean, sd):
     """The series shifted and scaled so that its mean is `mean` and its spread (population sd) is `sd`, exactly:
     a uniformly drawn step then has the chosen mean and variance, like the lognormal's step with the same inputs."""
     x = np.asarray(steps, dtype=np.float64)
+    if not (np.isfinite(x).all() and np.isfinite(mean) and np.isfinite(sd) and sd >= 0):
+        raise ValueError("steps, mean and sd must be finite, and sd non-negative")
     c = x - x.mean()
+    if not c.std() > 0:
+        raise ValueError("a constant series has no spread to rescale")
     return c * (sd / c.std()) + mean
 
 

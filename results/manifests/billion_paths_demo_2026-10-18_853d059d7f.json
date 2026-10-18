@@ -1,0 +1,38 @@
+{
+ "argv": [],
+ "code": {
+  "definedtarget/__init__.py": "f78f770298d8304c58d06edeb01f0d623e3b12c5a60104ca5a4444e1963174cc",
+  "definedtarget/montecarlo/__init__.py": "9d9361aaa6b676dbbb25e5444b7ec2279006800168935dda0b76c9df51ac7998",
+  "definedtarget/montecarlo/manifest.py": "abcbb9431326bfdc5fa675d1df637502dc094d762f81e306d51c8bb40cb45481",
+  "definedtarget/montecarlo/paths.py": "7749b4ba6f41cb9c8f1d7a7eb6ee473edea465ad19647a752cc66251cbdae43b",
+  "definedtarget/montecarlo/rng.py": "fcce8bb63e35a00ad7c7b36fddf3a7e347963c603d0f4c8147b32a718a251ebc",
+  "definedtarget/montecarlo/stats.py": "3fbf85a73d5aa863015167e694a5e657168e366eb83afb21f31adc92b7ae5e1b",
+  "definedtarget/montecarlo/stream.py": "15e9b32071fe03dd28704e8d95d86b21810ec7c5b80318936f8690313b8b0911",
+  "definedtarget/pricing.py": "13854e1285404bc4730f66cc5a9c92aeb4c3bde3270aacc87f7cb4cd759779d4",
+  "scripts/billion_paths_demo.py": "2f9fb5a54e8b8ecbe37b3e6cac24023f048fe58ee7d0c553201319d89332ecf8"
+ },
+ "date_utc": "2026-10-18",
+ "deterministic": false,
+ "inputs": {},
+ "kind": "run manifest",
+ "name": "billion_paths_demo",
+ "output": {
+  "lines": 2,
+  "sha256": "853d059d7fd046032fca776ce84e1477fb554a67c6417342f8810ba28bc57423"
+ },
+ "seconds": 86.1,
+ "seeds": [
+  777
+ ],
+ "settings": {
+  "median_paths": 1000000000,
+  "target_se": 0.004
+ },
+ "versions": {
+  "numba": "0.68.0",
+  "numpy": "2.5.3",
+  "python": "3.13.15",
+  "scipy": "1.18.1",
+  "system": "Windows"
+ }
+}

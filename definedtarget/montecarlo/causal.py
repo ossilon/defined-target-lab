@@ -8,9 +8,10 @@ Plain words
   different futures and requires outputs 0..k to stay identical, bit for bit. A rule that reads even one future row
   changes some output at or before its cut, and the check reports where.
 - The futures (FUTURES): the rest reversed, shuffled, flat (the last known row repeated), a crash and a spike (ten
-  spreads below and above the mean), and unrelated noise. Harsh futures catch rules that peek only when something
-  extreme is coming; every cut point (the default for series up to 1,000 rows) catches rules that peek only on
-  some dates, such as month-ends.
+  spreads below and above the mean), unrelated noise, no future at all (the series ends at k) and a longer one
+  (twice the rows). Harsh futures catch rules that peek only when something extreme is coming; the two lengths
+  catch rules that read how many rows there are; every cut point (the default for series up to 1,000 rows)
+  catches rules that peek only on some dates, such as month-ends.
 - What it does NOT check: execution timing (a decision at k's close may only earn returns from k + 1 on), parameters
   fitted on the whole history and then fixed (the rule then looks causal), and data that was revised or published
   late (the check sees the final series). The causal backtest toolkit (v0.3.2 design) covers those.
@@ -18,7 +19,7 @@ Plain words
 """
 import numpy as np
 
-FUTURES = ("reversed", "shuffled", "flat", "crash", "spike", "noise")
+FUTURES = ("reversed", "shuffled", "flat", "crash", "spike", "noise", "none", "longer")
 ALL_CUTS_UP_TO = 1000            # series up to this many rows get every cut point by default
 SPREAD_CUTS = 100                # longer series: this many cut points spread evenly, plus the first and last
 
@@ -34,7 +35,11 @@ def _futures(series, k, rng):
            "flat": np.repeat(series[k:k + 1], len(tail), axis=0),
            "crash": np.broadcast_to(mean - 10.0 * sd, shape).astype(dt),
            "spike": np.broadcast_to(mean + 10.0 * sd, shape).astype(dt),
-           "noise": (rng.standard_normal(shape) * (sd + 1.0) + mean).astype(dt)}
+           "noise": (rng.standard_normal(shape) * (sd + 1.0) + mean).astype(dt),
+           # different lengths: the series ends at k, or runs on for twice as many rows (catches a rule that reads
+           # how many rows there are, which is also the future; audit of v0.3)
+           "none": tail[:0],
+           "longer": np.concatenate([tail, tail[::-1]])}
     return {name: np.concatenate([head, out[name]]) for name in FUTURES}
 
 

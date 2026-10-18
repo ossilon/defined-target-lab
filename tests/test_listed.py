@@ -1,4 +1,4 @@
-"""Listed-option capture (BACKLOG B2): close dates, protocol P2's read window, reply checks, filing, comparison.
+"""Listed-option capture: close dates, protocol P2's read window, reply checks, filing, comparison.
 
 Synthetic replies only (no TradingView data). Times are written in UTC; the comments give New York time.
 """

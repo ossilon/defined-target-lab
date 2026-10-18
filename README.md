@@ -91,9 +91,10 @@ The code here computes each fact from the issuer's public daily files and public
   of the option to volatility. (daily report)
 - **Speed**: one CPU core of an Intel Core i7-13700K (16 cores, 24 threads) prices 1 million options in 0.033 s
   and solves 1 million implied volatilities in 0.34 s (median of 7 runs; single-threaded numba 0.68, Python 3.13).
-  The Monte Carlo engine (v0.3) uses all 24 threads and, optionally, an NVIDIA GPU: 1 million XX paths over 814
-  real sessions take about 1.4 s on the CPU and 0.6 s on an RTX 3080 (lognormal), 0.65 s and 0.04 s (bootstrap)
-  (FINDINGS F16).
+  The Monte Carlo engine (v0.3) uses all 24 threads and, optionally, an NVIDIA GPU: 1 million S&P (SPY) paths over
+  814 real sessions take about 1.4 s on the CPU and 0.6 s on an RTX 3080 (lognormal), 0.65 s and 0.04 s
+  (bootstrap) (FINDINGS F16). The XX layer, which reprices the fund on every session of every path, runs on the CPU
+  only: about 10 s per million paths.
 
 ## Tools
 
@@ -105,7 +106,7 @@ The code here computes each fact from the issuer's public daily files and public
 | **Prospectus illustration**: recomputes the prospectus table | `py -m definedtarget prospectus` |
 | **Pre-registered predictions**: a hash-chained ledger of testable claims about XX's behavior | [forward/HYPOTHESES.md](forward/HYPOTHESES.md) |
 | **Verdicts**: computes each prediction's verdict from its frozen rule (provisional numbers before its review date); records a verdict only when asked | `py -I scripts/verdicts.py` |
-| **Monte Carlo engine** (v0.3): seeded paths on the real trading calendar (lognormal or blocks of real S&P 500 history), on the CPU or an optional GPU, with error bars, exact-answer tests, no look-ahead and a run manifest for every study. It imports nothing XX-specific. | `definedtarget.montecarlo` ([how it works and how to use it](docs/learn/06-the-monte-carlo-engine.md)) |
+| **Monte Carlo engine** (v0.3): seeded paths on the real trading calendar (lognormal or blocks of real S&P 500 history), on the CPU or an optional GPU, with error bars, exact-answer tests, no look-ahead and a run manifest for every study. It imports nothing XX-specific. Its interface stays provisional until v0.3.3: names and arguments may change. | `definedtarget.montecarlo` ([how it works and how to use it](docs/learn/06-the-monte-carlo-engine.md)) |
 | **XX path studies** (v0.3): what a holder lives through path by path (drawdowns, time below the price paid, the odds of reaching 2x / 5x / 10x), the volatility rule on real paths since 2007, and history's shape against the bell curve | `py -I scripts/xx_paths_study.py`, `slide_rule_test.py`, `effective_leverage_study.py`, `bootstrap_study.py` (FINDINGS F15-F19) |
 | **Monthly forecast check** (v0.3, protocol FC1): the engine forecasts XX one month ahead under four models; a month later the log records where the real outcome landed | `py -I scripts/forecast_check.py due`, then `forecast` / `outcome` |
 | **Plain-English explainers** | [docs/learn/](docs/learn/01-what-is-a-call.md) |

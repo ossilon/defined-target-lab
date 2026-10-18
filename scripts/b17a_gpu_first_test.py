@@ -151,6 +151,6 @@ def main():
 
 if __name__ == "__main__":
     with manifest.run("b17a_gpu_first_test", sys.argv[1:], REPO / "results" / "manifests", REPO,
-                      ("definedtarget/**/*.py", "scripts/b17a_gpu_first_test.py"), deterministic=False) as run:
+                      ("scripts/b17a_gpu_first_test.py",), deterministic=False) as run:
         main()
     print(f"run manifest: results/manifests/{run['path'].name}")

@@ -12,6 +12,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 import numpy as np
+from scipy.special import ndtr
 
 from _harness import check, raises
 
@@ -64,23 +65,37 @@ def nav_at(S, name, tau1):
 
 
 worst = 0.0
+# The exact lognormal answer, built here from the inputs with scipy's normal CDF (independent of forecast.spy_pit):
+# ln(S_T / S_t) ~ N((r - q - vol^2 / 2) tau1, vol^2 tau1), tau1 = ACT/365 years from the origin to the target.
+Q = INP.rate - math.log(INP.forward / INP.spot) / INP.tau
+TAU1 = (T1 - INP.origin).days / 365.0
 for name, m in record["models"].items():
-    tau1 = m["years"]
+    vol = INP.vix / 100.0 if name == "M4" else INP.implied_vol
+    check(f"{name}: the saved SPY terms are the inputs' drift, path vol and years",
+          abs(m["spy_mu"] - (INP.rate - Q)) < 1e-15 and m["spy_vol"] == vol and abs(m["years"] - TAU1) < 1e-15)
     for g in (0.8, 0.95, 1.0, 1.05, 1.25):
         lo, hi = INP.spot * 0.5, INP.spot * 1.5             # solve NAV(S*) / NAV(t) = g by bisection
-        n0 = nav_at(INP.spot, name, tau1)[1]
+        n0 = nav_at(INP.spot, name, TAU1)[1]
         for _ in range(100):
             mid = 0.5 * (lo + hi)
-            lo, hi = (mid, hi) if nav_at(mid, name, tau1)[0] / n0 < g else (lo, mid)
-        exact = fc.spy_pit(m, INP.spot, 0.5 * (lo + hi))
+            lo, hi = (mid, hi) if nav_at(mid, name, TAU1)[0] / n0 < g else (lo, mid)
+        s_star = 0.5 * (lo + hi)
+        exact = float(ndtr((math.log(s_star / INP.spot) - (INP.rate - Q - 0.5 * vol * vol) * TAU1) / (vol * math.sqrt(TAU1))))
         worst = max(worst, abs(fc.pit_from_levels(m["growth_levels"], g) - exact))
+        if g == 1.05:
+            check(f"{name}: forecast.spy_pit equals the independent formula", abs(fc.spy_pit(m, INP.spot, s_star) - exact) < 1e-12)
 check(f"every model's forecast matches the exact answer at 5 growth levels (worst gap {worst:.4f}, allowance 0.004 "
       "= 4 SE at 200,000 paths + interpolation)", worst < 0.004)
 
 check("SPY PIT is 0.5 at SPY's lognormal median", all(abs(fc.spy_pit(m, 100.0, 100.0 * math.exp(
     (m["spy_mu"] - 0.5 * m["spy_vol"] ** 2) * m["years"])) - 0.5) < 1e-12 for m in record["models"].values()))
-check("PIT outside the saved points is 0.0005 / 0.9995",
+check("PIT strictly outside the saved points is 0.0005 / 0.9995",
       fc.pit_from_levels([1.0, 2.0], 0.5) == 0.0005 and fc.pit_from_levels([1.0, 2.0], 3.0) == 0.9995)
+lv = list(np.linspace(1.0, 2.0, 999))
+check("PIT exactly at the first / last saved point interpolates (0.001 / 0.999), as rule 6 says",
+      fc.pit_from_levels(lv, 1.0) == 0.001 and abs(fc.pit_from_levels(lv, 2.0) - 0.999) < 1e-15)
+check("the saved forecast records the library versions and the SPY close's source",
+      set(record["versions"]) == {"python", "numpy", "numba", "system"} and "spot_source" in record["inputs"])
 check("the record round-trips through its canonical bytes with the same fingerprint",
       fc.fingerprint(json.loads(fc.canonical(record))) == fc.fingerprint(record))
 check("999 saved points per model, increasing", all(len(m["growth_levels"]) == 999 and

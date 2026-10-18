@@ -60,7 +60,7 @@ def main(argv):
 
 if __name__ == "__main__":
     with manifest.run("effective_leverage_study", sys.argv[1:], REPO / "results" / "manifests", REPO,
-                      ("definedtarget/**/*.py", "scripts/effective_leverage_study.py"), seeds=[17]) as run:
+                      ("scripts/effective_leverage_study.py",), seeds=[17]) as run:
         rc = main(sys.argv[1:])
     print(f"run manifest: results/manifests/{run['path'].name}")
     sys.exit(rc)

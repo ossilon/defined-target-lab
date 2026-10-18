@@ -1,4 +1,4 @@
-"""Cboe's daily FLEX execution reports: the fund's own option trades (backlog B21; the entry cost behind H1 and H9).
+"""Cboe's daily FLEX execution reports: the fund's own option trades (the entry cost behind H1 and H9).
 
 Cboe publishes one spreadsheet per trading day at
 https://www.cboe.com/us/options/market_statistics/flex_trade_reports/ with every FLEX execution on its exchange:

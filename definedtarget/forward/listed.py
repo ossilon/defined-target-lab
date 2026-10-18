@@ -1,4 +1,4 @@
-"""Daily snapshot of the listed S&P 500 Dec-2029 calls (backlog B2; hypotheses H9, H13, H17, H19).
+"""Daily snapshot of the listed S&P 500 Dec-2029 calls (hypotheses H9, H13, H17, H19).
 
 How the capture works
 - A Claude scheduled task asks the TradingView connection for the delayed bid and ask of each call in STRIKES
@@ -7,7 +7,7 @@ How the capture works
   1. The close it belongs to: the latest NYSE session already closed (16:15 New York time) at the moment of reading.
   2. Protocol P2's window: a quote counts only if read between 16:15 and 20:15 New York time on that close date
      (after the regular session, before Cboe's overnight session). Reads outside the window are kept and flagged,
-     never counted; they serve comparisons such as the overnight test (BACKLOG B2b).
+     never counted; they serve comparisons such as the overnight test.
   3. The raw reply goes to data/raw/tradingview_chain/<close date>/<read time>.json, and one row per call goes to
      data/tables/listed_chain.csv. Nothing is ever overwritten.
 - TradingView's data is display-only: everything stays in the git-ignored data/ folder; only derived aggregates are
@@ -54,7 +54,7 @@ def close_for(read_utc):
     return close, in_window
 
 
-# Draft protocol P3 (NOT frozen; evidence gathered 2026-10-19 to 2026-10-30, BACKLOG B2): a quote counts only if its
+# Draft protocol P3 (NOT frozen; evidence gathered 2026-10-19 to 2026-10-30): a quote counts only if its
 # market time (read time minus the feed's stated delay) falls between 16:00 and 16:15 New York time on its close date:
 # after the S&P 500 closes, while SPX options still trade. TradingView's OPRA feed reports update_mode
 # "delayed_streaming_900" (15 minutes); with it, readings between 16:15 and 16:30 show the quotes of 16:00-16:15.
@@ -158,7 +158,7 @@ def compare(close_date, root=None):
     """For one close: does a reading outside P2's window give the same quotes as the one inside it?
 
     Returns (strikes compared, strikes identical, list of differences) between the first in-window reading and the
-    last out-of-window reading of that close (the overnight test, BACKLOG B2b).
+    last out-of-window reading of that close (the overnight test).
     """
     rows = [r for r in load(root) if r["close_date"] == str(close_date)]
     inside = [r for r in rows if r["in_window"] == "True"]

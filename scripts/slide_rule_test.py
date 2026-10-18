@@ -77,7 +77,7 @@ def main():
     spx_path = REPO / "data" / "external" / "spx_daily_library.csv"
     df, fetched, vix_path = load()
     with manifest.run("slide_rule_test", sys.argv[1:], REPO / "results" / "manifests", REPO,
-                      ("definedtarget/**/*.py", "scripts/slide_rule_test.py"),
+                      ("scripts/slide_rule_test.py",),
                       inputs={"spx": spx_path, "vix1y": vix_path},
                       settings={"life": LIFE, "every": EVERY, "m": M_MULT, "slide": SLIDE}) as m:
         report(df, fetched)

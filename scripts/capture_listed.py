@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""File one TradingView reply for the listed S&P 500 Dec-2029 calls (BACKLOG B2).  From the repository folder:
+"""File one TradingView reply for the listed S&P 500 Dec-2029 calls.  From the repository folder:
 
     py -I scripts\\capture_listed.py --symbols              print the symbols to request, as JSON
     py -I scripts\\capture_listed.py <reply.json>           file a saved reply, read now

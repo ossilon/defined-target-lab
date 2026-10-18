@@ -1,4 +1,4 @@
-"""No look-ahead (V03_DEPTH_PASS.md rank 15): nothing reported for session k may depend on anything after k.
+"""No look-ahead (v0.3 design review): nothing reported for session k may depend on anything after k.
 
 Judges, all exact (bit for bit):
 1. montecarlo.causal.check, the reusable checker for later rules (v0.3.2's dip and ladder studies): it passes
@@ -102,6 +102,11 @@ check("r has no fall of more than 5%, so crash_peek never fires on the real seri
 bad = causal.check(crash_peek, r)
 check(f"a rule that peeks only when a crash is coming is caught ({len(bad)} cuts)", len(bad) > 0 and
       all(f in causal.FUTURES for _, _, f in bad))
+for name, rule in (("dividing by the series length", lambda x: x / len(x)),
+                   ("switching on once the series is long", lambda x: x * float(x.size > 299))):
+    bad = causal.check(rule, r)
+    check(f"causal.check catches a rule that reads the series length: {name} ({len(bad)} cuts)",
+          len(bad) > 0 and {f for _, _, f in bad} <= {"none", "longer"}, bad[:3])
 t0 = __import__("time").perf_counter()
 causal.check(trailing_mean, r)
 check("checking 600 sessions at every cut point under 6 futures takes under 10 s",

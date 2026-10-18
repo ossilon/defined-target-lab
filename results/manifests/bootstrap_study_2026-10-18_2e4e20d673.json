@@ -1,0 +1,56 @@
+{
+ "argv": [
+  "--french",
+  "F-F_Research_Data_Factors_daily.csv"
+ ],
+ "code": {
+  "definedtarget/__init__.py": "f78f770298d8304c58d06edeb01f0d623e3b12c5a60104ca5a4444e1963174cc",
+  "definedtarget/calendar.py": "326c930f3599c0f5d6b5b71aa85cda2d29f509506e4a0dc62f26651169d0a8ef",
+  "definedtarget/montecarlo/__init__.py": "9d9361aaa6b676dbbb25e5444b7ec2279006800168935dda0b76c9df51ac7998",
+  "definedtarget/montecarlo/bootstrap.py": "b2f0b4c7bc06584d51650d614f4487ae160e82fead68444865bbcc9e611d9a91",
+  "definedtarget/montecarlo/manifest.py": "abcbb9431326bfdc5fa675d1df637502dc094d762f81e306d51c8bb40cb45481",
+  "definedtarget/montecarlo/paths.py": "7749b4ba6f41cb9c8f1d7a7eb6ee473edea465ad19647a752cc66251cbdae43b",
+  "definedtarget/montecarlo/rng.py": "fcce8bb63e35a00ad7c7b36fddf3a7e347963c603d0f4c8147b32a718a251ebc",
+  "scripts/bootstrap_study.py": "96d5a3cc62b1441e26f9963f26a60dfc9ea3f083931667a17f2157a107a3a7c9"
+ },
+ "date_utc": "2026-10-18",
+ "deterministic": true,
+ "inputs": {
+  "french": {
+   "bytes": 1210997,
+   "file": "F-F_Research_Data_Factors_daily.csv",
+   "sha256": "c2dc30c9e89eeea05a689c81fb426f4d76711270733b3731997615cbdff5b247"
+  },
+  "spx": {
+   "bytes": 408692,
+   "file": "spx_daily_library.csv",
+   "sha256": "4450e969c82aece0897bc026553508a439338e00cd73be834dd8cc96c5e7c0f7"
+  }
+ },
+ "kind": "run manifest",
+ "name": "bootstrap_study",
+ "output": {
+  "lines": 24,
+  "sha256": "2e4e20d6730741f1eef616d89775aadeca9ddb8ec6cdeafe8848a1f5cf2270fd"
+ },
+ "seconds": 9.6,
+ "seeds": [
+  20261017
+ ],
+ "settings": {
+  "blocks": [
+   21,
+   126,
+   504
+  ],
+  "paths": 1000000
+ },
+ "versions": {
+  "numba": "0.68.0",
+  "numpy": "2.5.3",
+  "pandas": "3.0.6",
+  "python": "3.13.15",
+  "scipy": "1.18.1",
+  "system": "Windows"
+ }
+}

@@ -3,8 +3,9 @@
 Plain words
 - Wrap a study's main body in `with manifest.run(...)`. Everything it prints still goes to the screen, and a copy is
   fingerprinted (SHA-256). On a clean finish, one JSON file is written to `out_dir` with: the run's name and
-  arguments, its seeds, each input file's name, size and SHA-256, the SHA-256 of every code file, the library
-  versions, the run time in seconds, and the output's fingerprint and line count.
+  arguments, its seeds, each input file's name, size and SHA-256, the SHA-256 of every code file the run loaded
+  from `code_root` (plus any named by pattern, such as the script itself), the library versions, the run time in
+  seconds, and the output's fingerprint and line count.
 - Rerun the same command on the same inputs and code: a seeded study must print the same output, so the new
   manifest's output fingerprint must match the old one (`same_output`). That is the reproducibility check; a timing
   study (deterministic=False) prints different times each run, so only its settings are comparable.
@@ -54,11 +55,29 @@ def _versions():
     return out
 
 
-def code_fingerprints(root, patterns):
-    """{relative path: SHA-256} for every file under root matching the glob patterns (sorted, '/' separators)."""
-    root = Path(root)
-    files = sorted({p for pat in patterns for p in root.glob(pat) if p.is_file() and "__pycache__" not in p.parts})
-    return {p.relative_to(root).as_posix(): sha256_file(p) for p in files}
+def loaded_files(root):
+    """The source files under root of every module this Python process has imported (the code a run used)."""
+    root = Path(root).resolve()
+    out = set()
+    for mod in list(sys.modules.values()):
+        f = getattr(mod, "__file__", None)
+        if f and f.endswith(".py"):
+            p = Path(f).resolve()
+            if root in p.parents:
+                out.add(p)
+    return out
+
+
+def code_fingerprints(root, patterns=(), loaded=True):
+    """{relative path: SHA-256} for the files under root matching the glob patterns, plus (loaded=True) every module
+    under root the process has imported: the code the run used, and nothing it did not (so an unrelated new file
+    elsewhere in the package does not make an old manifest look stale; audit of v0.3). Sorted, '/' separators."""
+    root = Path(root).resolve()
+    patterns = (patterns,) if isinstance(patterns, str) else patterns     # one pattern given as a plain string
+    files = {p.resolve() for pat in patterns for p in root.glob(pat) if p.is_file() and "__pycache__" not in p.parts}
+    if loaded:
+        files |= loaded_files(root)
+    return {p.relative_to(root).as_posix(): sha256_file(p) for p in sorted(files)}
 
 
 class _Tee(io.TextIOBase):
@@ -74,18 +93,19 @@ class _Tee(io.TextIOBase):
 
 
 @contextmanager
-def run(name, argv, out_dir, code_root, code_patterns, seeds=(), inputs=None, settings=None, deterministic=True):
+def run(name, argv, out_dir, code_root, code_patterns=(), seeds=(), inputs=None, settings=None, deterministic=True):
     """Record a manifest for the code run inside the `with` block (written only if it finishes without an error).
 
-    inputs: {label: path} of every data file read; settings: any extra values worth keeping (path counts, grids).
+    code_patterns: globs under code_root always fingerprinted (e.g. the script itself); every module under
+    code_root that the process has imported by the end of the run is fingerprinted too. inputs: {label: path} of
+    every data file read; settings: any extra values worth keeping (path counts, grids).
     Yields a dict; after the block it holds the manifest and "path", the file written."""
     t0 = time.perf_counter()
     inputs = {k: Path(v) for k, v in (inputs or {}).items()}
     record = {"kind": KIND, "name": name, "argv": [_public_arg(str(a)) for a in argv], "seeds": list(seeds),
               "settings": settings or {}, "deterministic": bool(deterministic),
               "inputs": {k: {"file": p.name, "bytes": p.stat().st_size, "sha256": sha256_file(p)}
-                         for k, p in sorted(inputs.items())},
-              "code": code_fingerprints(code_root, code_patterns)}
+                         for k, p in sorted(inputs.items())}}
     tee = _Tee(sys.stdout)
     real, sys.stdout = sys.stdout, tee
     result = {}
@@ -94,7 +114,8 @@ def run(name, argv, out_dir, code_root, code_patterns, seeds=(), inputs=None, se
     finally:
         sys.stdout = real
     text = tee.copy.getvalue().replace("\r\n", "\n")
-    record.update({"date_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d"), "seconds": round(time.perf_counter() - t0, 1),
+    record.update({"code": code_fingerprints(code_root, code_patterns),     # after the run: everything it imported
+                   "date_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d"), "seconds": round(time.perf_counter() - t0, 1),
                    "versions": _versions(),
                    "output": {"sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(), "lines": text.count("\n")}})
     out = Path(out_dir)

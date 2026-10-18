@@ -142,3 +142,15 @@ check("a path is the rng's draws: step k uses normal draw k of that path", np.al
 raises("times must start at 0", lambda: paths.lognormal(1, 1, [0.1, 0.2], 0.0, 0.2), "start at 0")
 raises("checkpoints must be valid step numbers", lambda: paths.lognormal(1, 1, [0, 0.1], 0.0, 0.2, checkpoints=[2]),
        "step numbers")
+# Bad numbers are refused with an error, never turned into all-NaN results (audit of v0.3)
+nan = float("nan")
+raises("a NaN vol is refused", lambda: paths.lognormal(1, 1, [0, 0.1], 0.0, nan), "vol must be positive")
+raises("an infinite vol is refused", lambda: paths.lognormal(1, 1, [0, 0.1], 0.0, float("inf")), "vol must be positive")
+raises("a NaN drift is refused", lambda: paths.lognormal(1, 1, [0, 0.1], nan, 0.2), "mu must be finite")
+raises("a NaN time is refused", lambda: paths.lognormal(1, 1, [0, nan, 0.2], 0.0, 0.2), "times must be finite")
+raises("a fractional seed is refused (not truncated)", lambda: paths.lognormal(1.5, 1, [0, 0.1], 0.0, 0.2), "whole numbers")
+raises("a fractional path count is refused", lambda: paths.lognormal(1, 2.0, [0, 0.1], 0.0, 0.2), "whole numbers")
+check("a numpy integer seed is fine", paths.lognormal(np.uint64(3), 2, [0, 0.1], 0.0, 0.2)["log_end"].size == 2)
+from definedtarget.montecarlo import bootstrap as _bs  # noqa: E402
+raises("equal_moments refuses a constant history", lambda: _bs.equal_moments(np.ones(10), 0.0, 0.01), "constant")
+raises("equal_moments refuses a NaN in the history", lambda: _bs.equal_moments([0.1, nan, 0.2], 0.0, 0.01), "finite")

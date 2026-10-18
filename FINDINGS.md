@@ -291,8 +291,9 @@ Caveats: one simple payoff and one machine; wall-clock times on a desktop that w
 The engines use different random streams (numpy PCG64, numba per-thread streams, cuRAND), so they agree only within
 Monte Carlo error, not path by path.
 
-**F15. Real history's shape lowers XX's model value by 13-24% against the simple model at the same daily
-volatility, and one era's history understated the next era's drawdowns.** Measured 2026-10-17
+**F15. Post-1950 S&P 500 history's shape lowers XX's model value by 13-24% against the simple model at the same
+daily volatility (history since 1926, with the 1930s: +6% to -14%), and one era's history understated the next
+era's drawdowns.** Measured 2026-10-17
 (`scripts/bootstrap_study.py`, montecarlo engine v0.3 steps 1-5; S&P 500 price closes 1950-01-03 to 2026-10-09;
 Ken French's daily US market total return 1926-07-01 to 2026-08-31; 1 million paths per row; the script fixed the
 study's outputs before the first run, and one diagnostic column, "value, E = F", came after it).
@@ -365,12 +366,13 @@ lognormal paths per row; XX's 2026-10-13 example, 815 real sessions; 16.6% reali
 | median 10%/yr | 51.2% | 42.2% | 72.3% / 39.7% / 14.7% | 28.1% | 85.3% | 48.5% |
 
 With the slide rule at 1 point per -10% (F12), the end-of-life numbers do not change (the payoff ignores vol) and the
-chance of touching 2x along the way falls 3-4 points (45.5% / 60.2% / 69.6%), because vol falls as SPY rises. The
+chance of touching 2x along the way falls 2.7-3.8 points (45.5% / 60.2% / 69.6%), because vol falls as SPY rises. The
 risk-neutral profit chance (23.1%) matches the 23% that F13 read from the option price by a different route.
 
-The martingale gap (risk-neutral drift, no fee, no cash): under constant vol the discounted mark averages to today's
-price, as it must (+0.11%, +0.15%, +0.18%, +0.18% at sessions 100, 400, 700 and expiry; all within 2 standard errors).
-With the slide rule it does not: -2.27% (SE 0.05%), -5.05% (0.13%), -2.34% (0.21%), then +0.18% at expiry. A vendor
+The martingale gap (the bare option: no fee, no cash; risk-neutral drift; 1 million paths, seed 2026, printed by
+`scripts/xx_paths_study.py` since 2026-10-18): under constant vol the discounted mark averages to today's price, as it
+must (+0.03%, +0.07%, +0.23%, +0.12% at sessions 100, 400, 700 and expiry; all within 1.1 standard errors). With the
+slide rule it does not: -2.33% (SE 0.05%), -5.13% (0.13%), -2.29% (0.21%), then +0.12% at expiry. A vendor
 whose marks followed this rule would show XX's mid-life NAVs below what today's option price implies, on average.
 Either the rule is not how the market moves long-dated vol (F12 measured it on two years of one listed option), or
 today's price embeds a dynamic the rule leaves out (the skew moving with the index). This is the depth pass's
