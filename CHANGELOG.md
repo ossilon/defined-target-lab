@@ -26,12 +26,19 @@ has no entries yet, so every FC1 fix applies from its first month.
   name, download date, SHA-256), and the VIX history is the one captured by the deadline when one exists, so a
   later revision of either is visible. Forecast entries fingerprint every loaded module, the input code included.
 - The inputs are checked (finite, positive where they must be) before a forecast is saved.
+- From the independent re-check of these fixes: a PIT is checked before rounding, so a crash month whose SPY PIT
+  rounds to 0.0000 (a valid rule 6 value) is recorded, not refused; an options-per-share move that reverts on the
+  next close (a duplicated option line) is noted, not treated as a void, while one that stays is a void; a roll
+  first seen on the target close is found (the check reads one close past each end); `due` and the daily routine
+  mark lateness at the session's end and print the right closing time (13:00 on 2029-07-03); the saved forecast
+  carries the fingerprints of the code that computed it, so a recovered entry names that code; a logged forecast
+  whose private file is lost is never recomputed (back up `data/forecasts/`).
 
 ### Fixed: a published table
 - FINDINGS F18: each synthetic XX held half of XX's cash weight (0.45% instead of 0.94% at the start; the cash was
   scaled for 0.48 calls while the script prices one). Corrected and rerun: drawdowns moved 0.3-0.4 points (median
-  83.7% with real VIX1Y against 91.2-91.3%), peaks 0.01-0.02x; the gaps between markings and the measured slide (3.55
-  points per -10%) did not change.
+  83.7% with real VIX1Y against 91.2-91.3%), peaks 0.01-0.03x, and the share of real-VIX1Y lives that touched 2x
+  from 70.7% to 70.2%; the gaps between markings and the measured slide (3.55 points per -10%) did not change.
 
 ### Fixed: install, engine and scanner
 - `pip install .` failed: `keywords` and `classifiers` sat under `[project.optional-dependencies]` (since v0.2.3).

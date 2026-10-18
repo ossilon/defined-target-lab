@@ -104,12 +104,12 @@ def run(root=None, report_dir=None, now=None, capture=True):
         # is past its deadline, so a month cannot slip by unnoticed. Recording stays a manual command.
         try:
             from . import forecast
-            for kind, t, close, dl, late in forecast.due(now.astimezone(forecast.NEW_YORK).date()):
+            for kind, t, close, dl, late in forecast.due(now.astimezone(forecast.NEW_YORK).date(), now=now):
                 if kind == "report":
                     notes.append(f"FC1 report due after {t} outcome entries: py -I scripts\\forecast_check.py report")
                     continue
                 msg = (f"FC1 {kind} for origin {t} (close {close}) {'is past its deadline ' if late else 'is due by '}"
-                       f"the end of {dl} (16:00 New York): py -I scripts\\forecast_check.py {kind} --origin {t}"
+                       f"the end of {dl} ({forecast.close_time(dl):%H:%M} New York): py -I scripts\\forecast_check.py {kind} --origin {t}"
                        + (" --no-events (after reviewing the issuer's notices) or --void \"...\""
                           if kind == "outcome" else ""))
                 (stops if late else notes).append(msg)

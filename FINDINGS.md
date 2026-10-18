@@ -390,7 +390,8 @@ separate spans; XX's shape, cash and fee; rate and dividend yield held constant;
 0.77 x VIX1Y on the start day, 0.77 being the design review's implied-vol / VIX1Y multiplier, an assumption).
 Corrected 2026-10-18 after an independent external audit of v0.3.0: the first run gave each synthetic XX half of
 XX's cash weight (0.45% instead of 0.94% at the start); the table below is the corrected run. The correction moved
-drawdowns by 0.3-0.4 points and peaks by 0.01-0.02x; the gaps and the measured slide did not change:
+drawdowns by 0.3-0.4 points, peaks by 0.01-0.03x and one touched-2x share by 0.5 points; the gaps and the
+measured slide did not change:
 
 | Marking | Largest NAV drawdown: median / 90th pct | Longest underwater (sessions): median / 90th | Highest NAV / start: median / 90th | Touched 2x |
 |---|---|---|---|---|

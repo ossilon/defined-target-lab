@@ -170,7 +170,10 @@ def make_forecast(inp, T, npaths=PATHS, provenance=None):
     rec = {"protocol": "FC1", "origin": inp.origin.isoformat(), "target": T.isoformat(), "paths": npaths,
            "seed": seed_for(inp.origin), "levels": "0.001 to 0.999 in steps of 0.001",
            "inputs": {k: (v.isoformat() if isinstance(v, date) else v) for k, v in asdict(inp).items()},
-           "models": models, "versions": _versions()}
+           "models": models, "versions": _versions(),
+           # the code that computed it, inside the saved record, so a recovered log entry names THIS code, not the
+           # code of a later run (re-check of v0.3.0.1)
+           "code_sha256": code_fingerprints()}
     if provenance:
         rec["provenance"] = provenance
     return rec
@@ -240,11 +243,13 @@ def score(forecast, nav_t, nav_T, spy_t, spy_T):
     Refuses missing or invalid numbers rather than scoring them."""
     _finite_positive(nav_t=nav_t, nav_T=nav_T, spy_t=spy_t, spy_T=spy_T)
     growth = nav_T / nav_t
-    out = {name: {"xx": round(pit_from_levels(m["growth_levels"], growth), 4),
-                  "spy": round(spy_pit(m, spy_t, spy_T), 4)} for name, m in forecast["models"].items()}
-    if not all(0.0 < p[k] < 1.0 for p in out.values() for k in ("xx", "spy")):
-        raise ValueError(f"a PIT outside (0, 1): {out}; nothing recorded")
-    return out
+    raw = {name: {"xx": pit_from_levels(m["growth_levels"], growth), "spy": spy_pit(m, spy_t, spy_T)}
+           for name, m in forecast["models"].items()}
+    # Check the UNROUNDED values: a crash month's SPY PIT can round to 0.0000, a valid rule 6 value that must be
+    # recorded, not refused (re-check of v0.3.0.1)
+    if not all(math.isfinite(p[k]) and 0.0 <= p[k] <= 1.0 for p in raw.values() for k in ("xx", "spy")):
+        raise ValueError(f"a PIT that is not a probability: {raw}; nothing recorded")
+    return {name: {k: round(v, 4) for k, v in p.items()} for name, p in raw.items()}
 
 
 # ------------------------------------------------------------------ inputs from the data folder
@@ -308,7 +313,9 @@ def _vix_closes(t, root, fetch_vix=True):
 def input_provenance(t, root=None):
     """Which saved files a forecast's inputs came from: the issuer's holdings file for t (newest saved version) and
     the VIX history, by name, download date and SHA-256 (audit of v0.3.0, D05: a later revision of either becomes
-    visible). Saved in the private forecast."""
+    visible). Saved in the private forecast. The holdings entry names the newest saved version when the forecast
+    runs; the tables are rebuilt from that version by the daily routine (capture and rebuild in one run), so a
+    capture without a rebuild could name a newer file than the tables used."""
     from . import fetch, parse, roundhill
     root = fetch.data_dir(root)
     out = {}
@@ -338,11 +345,12 @@ def closes(t, root=None):
 
 
 def events_between(t, T, root=None):
-    """[(date, event)] after t up to T that make a month void (FC1 rule 8) and the data can show: a roll or option
-    change and a reverse split (the hypotheses' own void test), options per share moving more than 5% between two
-    closes (a split or a payout in kind), and every event listed in data/external/void_events.csv. A distribution or a
-    closure notice may not show in the data at all: the outcome command also asks the operator to confirm the review
-    (audit of v0.3.0, D02)."""
+    """([(date, event)], [note]): events after t up to T that make a month void (FC1 rule 8) and the data can show:
+    a roll or option change and a reverse split (the hypotheses' own void test), options per share moving more than
+    5% between two closes and staying there (a split or a payout in kind), and every event listed in
+    data/external/void_events.csv. A move that reverts on the next close is a file glitch: it goes into the notes,
+    not the events (a creation or redemption is not a void either). A distribution or a closure notice may not show in
+    the data at all: the outcome command also asks the operator to confirm the review (audit of v0.3.0, D02)."""
     import pandas as pd
 
     from .. import verdicts
@@ -350,14 +358,28 @@ def events_between(t, T, root=None):
     root = fetch.data_dir(root)
     s = pd.read_csv(root / "tables" / "xx_state.csv")
     s["as_of"] = pd.to_datetime(s["as_of"]).dt.date
-    s = s[(s["as_of"] >= t) & (s["as_of"] <= T)].sort_values("as_of").reset_index(drop=True)
-    out = [(d, e) for d, e in verdicts.find_voids(s, root) if t < d <= T]
+    # One session beyond each end: a roll first seen on T needs T's next close to show as two consecutive closes
+    # (re-check of v0.3.0.1); events are still kept only when dated after t and up to T.
+    lo, hi = nyse.previous_session(t), nyse.next_session(T)
+    s = s[(s["as_of"] >= lo) & (s["as_of"] <= hi)].sort_values("as_of").reset_index(drop=True)
+    events = [(d, e) for d, e in verdicts.find_voids(s, root) if t < d <= T]
+    notes = []
     if "contracts_per_share" in s.columns:
         c = s["contracts_per_share"].astype(float).to_numpy()
+        skip = set()
         for i in range(1, len(s)):
-            if c[i - 1] > 0 and abs(c[i] / c[i - 1] - 1.0) > OPTIONS_JUMP:
-                out.append((s.loc[i, "as_of"], f"options per share moved {c[i - 1]:.7f} -> {c[i]:.7f}"))
-    return sorted(set(out))
+            d = s.loc[i, "as_of"]
+            if i in skip or not (t < d <= T) or not (c[i - 1] > 0 and abs(c[i] / c[i - 1] - 1.0) > OPTIONS_JUMP):
+                continue
+            move = f"options per share moved {c[i - 1]:.7f} -> {c[i]:.7f}"
+            if i + 1 < len(s) and abs(c[i + 1] / c[i - 1] - 1.0) <= OPTIONS_JUMP:
+                notes.append(f"{d} {move} for one session and moved back (a file glitch, not an event)")
+                skip.add(i + 1)                                  # the move back is part of the same glitch
+            elif i + 1 < len(s):
+                events.append((d, move))
+            else:
+                events.append((d, move + " (unconfirmed: wait for the next close's file)"))
+    return sorted(set(events)), notes
 
 
 # ------------------------------------------------------------------ the public log (hash chained, like the ledger)
@@ -412,8 +434,9 @@ def append_log(entry, path=LOG_PATH, now=None, any_close=False):
     return full
 
 
-def due(today, path=LOG_PATH):
-    """[(kind, origin, close, deadline, late)] for every entry whose close has passed and is not in the log yet, and
+def due(today, path=LOG_PATH, now=None):
+    """[(kind, origin, close, deadline, late)] for every entry whose close has passed and is not in the log yet (late:
+    past the deadline session's end when `now` is given, else past its date), and
     ("report", number of outcomes, None, None, False) when rule 9's report is due: after every 12 outcome entries
     (voids included) and after the last one (audit of v0.3.0, D19)."""
     entries = read_log(path)
@@ -422,7 +445,8 @@ def due(today, path=LOG_PATH):
     for t, T in origins():
         for kind, close in (("forecast", t), ("outcome", T)):
             if close < today and (kind, t.isoformat()) not in have:
-                out.append((kind, t, close, deadline(close), today > deadline(close)))
+                late = is_late(close, now) if now is not None else today > deadline(close)
+                out.append((kind, t, close, deadline(close), late))
     n = sum(e["kind"] == "outcome" for e in entries)
     reported = {e["outcomes"] for e in entries if e["kind"] == "report"}
     if n and (n % REPORT_EVERY == 0 or n == len(origins())) and n not in reported:
@@ -433,7 +457,8 @@ def due(today, path=LOG_PATH):
 def forecast_entry(record, code=None):
     return {"kind": "forecast", "protocol": "FC1", "origin": record["origin"], "target": record["target"],
             "seed": record["seed"], "paths": record["paths"], "models": sorted(record["models"]),
-            "forecast_sha256": fingerprint(record), "code_sha256": code or code_fingerprints()}
+            "forecast_sha256": fingerprint(record),
+            "code_sha256": code or record.get("code_sha256") or code_fingerprints()}
 
 
 def outcome_entry(record, pits=None, void=None, review=None):

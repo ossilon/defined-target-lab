@@ -242,7 +242,7 @@ try:
                     check("D02: a reverse split between the closes blocks scoring, even with --no-events",
                           q(cli.cmd_outcome, args(no_events=True), log, store) == 2 and len(fc.read_log(log)) == 1)
                     check("... and found the event in the data", any("reverse split" in e for _, e in
-                                                                    fc.events_between(date(2026, 10, 30), date(2026, 11, 30))))
+                                                                    fc.events_between(date(2026, 10, 30), date(2026, 11, 30))[0]))
                     rc = q(cli.cmd_outcome, args(void="1-for-2 reverse split (made-up notice)"), log, store)
                     last = fc.read_log(log)[-1]
                     check("... and --void records the void with its reason and no PIT", rc == 0 and "void" in last
@@ -265,6 +265,37 @@ try:
         rc2 = q(cli.cmd_forecast, args(), log, store)
         check("D04: an orphaned saved forecast is logged once from its saved bytes, then refused",
               rc == 0 and rc2 == 2 and fc.read_log(log)[0]["forecast_sha256"] == fc.fingerprint(rec0))
+
+        # Re-check of v0.3.0.1: guards that must not block an ordinary month, and voids that must not slip through
+        def state(root, rows):
+            (root / "tables").mkdir(parents=True, exist_ok=True)
+            (root / "tables" / "xx_state.csv").write_text(
+                "as_of,strike,expiry,cash_per_share,nav_published,contracts_per_share,shares_outstanding\n" +
+                "".join(f"{d},{k},2030-01-10,0.2474,26,{c},100000\n" for d, k, c in rows), encoding="utf-8")
+            os.environ["DEFINEDTARGET_DATA"] = str(root)
+
+        state(tmp / "glitch", [("2026-10-30", 995.01, 0.0048), ("2026-11-10", 995.01, 0.0096),
+                               ("2026-11-11", 995.01, 0.0048), ("2026-11-30", 995.01, 0.0048)])
+        ev, notes = fc.events_between(date(2026, 10, 30), date(2026, 11, 30))
+        check("a one-session doubling that moves back (a duplicated option line) is a note, not a void event",
+              ev == [] and len(notes) == 1 and "glitch" in notes[0], (ev, notes))
+        state(tmp / "persist", [("2026-10-30", 995.01, 0.0048), ("2026-11-10", 995.01, 0.0096),
+                                ("2026-11-11", 995.01, 0.0096), ("2026-11-30", 995.01, 0.0096)])
+        check("a doubling that stays is a void event", len(fc.events_between(date(2026, 10, 30), date(2026, 11, 30))[0]) == 1)
+        state(tmp / "rollT", [("2026-10-30", 995.01, 0.0048), ("2026-11-30", 1100.0, 0.0048),
+                              ("2026-12-01", 1100.0, 0.0048)])
+        check("a roll first seen on the target close T is found (the next close confirms it)",
+              any("option line changed" in e for _, e in fc.events_between(date(2026, 10, 30), date(2026, 11, 30))[0]))
+        root = tmp / "lost"
+        data_folder(root / "data")
+        os.environ["DEFINEDTARGET_DATA"] = str(root / "data")
+        store, log = root / "store", root / "log.jsonl"
+        store.mkdir()
+        fc.append_log(fc.forecast_entry(rec0, code={}), log, now=datetime(2026, 11, 2, 15, tzinfo=timezone.utc))
+        check("a logged forecast whose private file is lost is never recomputed (the command stops at once)",
+              q(cli.cmd_forecast, args(), log, store) == 2 and not (store / "FC1_2026-10-30.json").exists())
+        check("... and outcome says the file is missing instead of crashing",
+              q(cli.cmd_outcome, args(no_events=True), log, store) == 2)
 finally:
     if old_env is None:
         os.environ.pop("DEFINEDTARGET_DATA", None)
@@ -272,3 +303,14 @@ finally:
         os.environ["DEFINEDTARGET_DATA"] = old_env
 check("D06: the forecast entry fingerprints the loaded input code too (parse, fetch, marks)",
       {"definedtarget/forward/parse.py", "definedtarget/forward/fetch.py"} <= set(fc.code_fingerprints()))
+
+# Re-check of v0.3.0.1: extreme but real months are recorded, not refused
+crash = fc.score(record, 26.0, 2.6, 778.0, 778.0 * 0.83)          # SPY -17% in a month (October 2008: -16.9%)
+check("a -17% SPY month is scored: M1-M3's SPY PITs round to 0.0 (a valid rule 6 value), not refused",
+      all(crash[m]["spy"] == 0.0 for m in ("M1", "M2", "M3")) and all(0.0 <= p[k] <= 1.0 for p in crash.values()
+                                                                    for k in ("xx", "spy")), crash)
+check("due marks an entry late after the deadline session's end, when given the time",
+      fc.due(date(2026, 11, 3), Path(tempfile.gettempdir()) / "no_such_fc1_log.jsonl",
+             now=datetime(2026, 11, 3, 21, 1, tzinfo=timezone.utc))[0][4] is True)
+check("the saved forecast carries the code that computed it, and its log entry names that code",
+      "code_sha256" in record and fc.forecast_entry(record)["code_sha256"] == record["code_sha256"])

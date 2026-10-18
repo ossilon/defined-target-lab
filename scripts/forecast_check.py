@@ -8,7 +8,8 @@
     py -I scripts\\forecast_check.py summary
 
 forecast: computes the four models' forecasts from the origin close's data, saves the record privately in
-data/forecasts/ (it holds issuer-derived numbers; written once, never overwritten) and appends its SHA-256 to the
+data/forecasts/ (it holds issuer-derived numbers; written once, never overwritten; back it up: the public
+log is useless without it) and appends its SHA-256 to the
 public log forward/forecast_log.jsonl. If the log write failed after the save, running it again logs the saved file
 (never a new forecast).  outcome: reads the SAVED forecast (its fingerprint must match the log), checks the month
 for void events (rule 8: the data's own checks, plus the operator's confirmation: --no-events after reviewing the
@@ -63,6 +64,10 @@ def cmd_forecast(a, log, store):
         entry = fc.append_log(fc.forecast_entry(record), log, now=_now(a), any_close=a.dry_run)
         print(f"recovered: logged the saved {path.name} ({entry['row_hash'][:12]}; late: {entry['late']})")
         return 0
+    if logged:   # the log has it but the private file is gone: a new computation could differ (re-check of v0.3.0.1)
+        print(f"the log already holds the forecast for {t}, but {path} is missing: restore it from your backup of "
+              "data/forecasts/ (never recompute a logged forecast); nothing done")
+        return 2
     if fc.is_late(t, _now(a)):
         print("note: past the deadline; the entry will be marked late (it still counts)")
     record = fc.make_forecast(fc.load_inputs(t), T, a.paths, provenance=fc.input_provenance(t))
@@ -81,6 +86,9 @@ def cmd_forecast(a, log, store):
 def cmd_outcome(a, log, store):
     t = date.fromisoformat(a.origin)
     path = store_path(store, t)
+    if not path.exists():
+        print(f"{path} is missing: restore the saved forecast from your backup of data/forecasts/; nothing recorded")
+        return 2
     record = json.loads(path.read_bytes())
     logged = [e for e in fc.read_log(log) if e["kind"] == "forecast" and e["origin"] == t.isoformat()]
     if not logged:
@@ -92,7 +100,11 @@ def cmd_outcome(a, log, store):
     T = date.fromisoformat(record["target"])
     # FC1 rule 8: a month is void after a split, reverse split, distribution, roll, closure notice or option change.
     # The data shows some of these; the operator confirms the rest (audit of v0.3.0, D02).
-    found = fc.events_between(t, T)
+    try:
+        found, notes = fc.events_between(t, T)
+    except ValueError as err:          # e.g. a void_events.csv row without its source
+        print(f"cannot check the month for void events: {err}; nothing recorded")
+        return 2
     if a.void:
         entry = fc.outcome_entry(record, void=a.void, review="void, recorded by the operator")
     elif found:
@@ -108,7 +120,8 @@ def cmd_outcome(a, log, store):
         nav_t, spy_t = fc.closes(t)
         nav_T, spy_T = fc.closes(T)
         entry = fc.outcome_entry(record, fc.score(record, nav_t, nav_T, spy_t, spy_T),
-                                 review="none: the data showed no void event and the operator confirmed none")
+                                 review="none: the data showed no void event and the operator confirmed none"
+                                 + ("; noted: " + "; ".join(notes) if notes else ""))
     entry = fc.append_log(entry, log, now=_now(a), any_close=a.dry_run)
     print(f"outcome {t} -> {T}: " + (f"void ({a.void})" if a.void else json.dumps(entry["pit"])) +
           f"; late: {entry['late']}")
@@ -142,13 +155,13 @@ def cmd_report(a, log, _store):
 
 def cmd_due(_a, log, store):
     today = datetime.now(timezone.utc).astimezone(fc.NEW_YORK).date()
-    items = fc.due(today, log)
+    items = fc.due(today, log, now=_now(_a))
     for kind, t, close, dl, late in items:
         if kind == "report":
             print(f"report due after {t} outcome entries: py -I scripts\\forecast_check.py report")
         else:
             print(f"{kind} for origin {t} (close {close}): {'LATE' if late else 'due'}, deadline end of {dl} "
-                  f"(16:00 New York)")
+                  f"({fc.close_time(dl):%H:%M} New York)")
     if not items:
         print("nothing due")
     return 0
