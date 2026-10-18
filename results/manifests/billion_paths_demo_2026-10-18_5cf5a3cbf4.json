@@ -1,10 +1,10 @@
 {
  "argv": [],
  "code": {
-  "definedtarget/__init__.py": "f78f770298d8304c58d06edeb01f0d623e3b12c5a60104ca5a4444e1963174cc",
+  "definedtarget/__init__.py": "c29f6b29683e2bb18635a494a737d9ca044ce7968ba7f80d006db9d354b565c5",
   "definedtarget/montecarlo/__init__.py": "9d9361aaa6b676dbbb25e5444b7ec2279006800168935dda0b76c9df51ac7998",
   "definedtarget/montecarlo/manifest.py": "abcbb9431326bfdc5fa675d1df637502dc094d762f81e306d51c8bb40cb45481",
-  "definedtarget/montecarlo/paths.py": "7749b4ba6f41cb9c8f1d7a7eb6ee473edea465ad19647a752cc66251cbdae43b",
+  "definedtarget/montecarlo/paths.py": "e0648bce8e3c182f031aec22ac36e61029775b62adc3750b4c1ffdb6bbf28279",
   "definedtarget/montecarlo/rng.py": "fcce8bb63e35a00ad7c7b36fddf3a7e347963c603d0f4c8147b32a718a251ebc",
   "definedtarget/montecarlo/stats.py": "3fbf85a73d5aa863015167e694a5e657168e366eb83afb21f31adc92b7ae5e1b",
   "definedtarget/montecarlo/stream.py": "15e9b32071fe03dd28704e8d95d86b21810ec7c5b80318936f8690313b8b0911",
@@ -18,9 +18,9 @@
  "name": "billion_paths_demo",
  "output": {
   "lines": 2,
-  "sha256": "853d059d7fd046032fca776ce84e1477fb554a67c6417342f8810ba28bc57423"
+  "sha256": "5cf5a3cbf436f3224656995d35d1b7713aabb82cb4ec6fe7ca824fc4e57e842a"
  },
- "seconds": 86.1,
+ "seconds": 80.0,
  "seeds": [
   777
  ],

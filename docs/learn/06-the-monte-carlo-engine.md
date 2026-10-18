@@ -32,8 +32,8 @@ within allowances fixed before the run.
 
 **4. A billion paths in fixed memory.** The engine never stores all paths. It merges running totals and fine
 histograms and finds exact percentiles with a second pass. On the test machine (`scripts/billion_paths_demo.py`),
-the option's value to a standard error of 0.004 took 1.10 billion paths in 29 s (54.67960 against the formula's
-54.67744), and the exact median of a billion end prices took 57 s while keeping 191,183 values. `run_to_precision` picks the path count for a target
+the option's value to a standard error of 0.004 took 1.10 billion paths in 27 s (54.67960 against the formula's
+54.67744), and the exact median of a billion end prices took 52 s while keeping 191,183 values. `run_to_precision` picks the path count for a target
 error, so "how accurate" replaces "how many paths".
 
 **5. Real history, not only the bell curve.** The bootstrap builds futures from blocks of real S&P 500 days (the
