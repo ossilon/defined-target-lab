@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Does the "vol follows the index" slide rule change XX's life on REAL paths? (v0.3 depth pass, rank 7)
+"""Does the "vol follows the index" slide rule change XX's life on REAL paths? (v0.3 design review)
 
     py -I scripts\\slide_rule_test.py            From target_funds/. Inputs: data/external/spx_daily_library.csv
                                                  (S&P 500 closes) and the captured Cboe VIX1Y history.

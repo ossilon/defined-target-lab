@@ -4,7 +4,7 @@ Judges: day-0 NAV = sim.share_value (the browser simulator's Python reference); 
 montecarlo.paths.lognormal's, bit for bit; a recomputation of whole NAV paths with sim.share_value and sim.vol_at
 reproduces every path measure; with constant vol, no fee and no cash under the risk-neutral drift, the discounted NAV
 averages to today's NAV at every checkpoint (exact identity, within 3 SE). The slide rule's gap from that identity is
-reported as information (the mystery the v0.3 depth pass asked to log).
+reported as information (the open question FINDINGS F17 describes).
 """
 import math
 from datetime import date

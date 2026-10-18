@@ -67,7 +67,8 @@ def check(rule, series, cuts=None, seed=0):
 
     series: 1-D or 2-D array (rows = sessions). cuts: rows after which the future is replaced (default
     default_cuts: every row for series up to 1,000 rows, else 100 spread evenly). The rule must return one output
-    per row (arrays with any number of columns)."""
+    per row (arrays with any number of columns) and accept a series of any length from 1 row up (the checker also
+    runs it on shorter and longer series); a rule that needs some history should return NaN until it has it."""
     x = np.asarray(series)
     n = x.shape[0]
     if n < 3:
@@ -81,7 +82,13 @@ def check(rule, series, cuts=None, seed=0):
         if not 0 <= k < n - 1:
             raise ValueError(f"cut {k} outside 0..{n - 2}")
         for name, future in _futures(x, k, rng).items():
-            first = _first_change(base, np.asarray(rule(future)), k)
+            try:
+                out = np.asarray(rule(future))
+            except Exception as err:                          # noqa: BLE001  (say why, then stop)
+                raise ValueError(f"the rule failed on a {len(future)}-row series (future '{name}' after cut {k}): "
+                                 f"{type(err).__name__}: {err}. Rules must accept any length from 1 row up; "
+                                 "return NaN until enough history exists") from err
+            first = _first_change(base, out, k)
             if first >= 0:
                 bad.append((int(k), first, name))
                 break

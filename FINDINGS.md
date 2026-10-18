@@ -375,8 +375,8 @@ must (+0.03%, +0.07%, +0.23%, +0.12% at sessions 100, 400, 700 and expiry; all w
 slide rule it does not: -2.33% (SE 0.05%), -5.13% (0.13%), -2.29% (0.21%), then +0.12% at expiry. A vendor
 whose marks followed this rule would show XX's mid-life NAVs below what today's option price implies, on average.
 Either the rule is not how the market moves long-dated vol (F12 measured it on two years of one listed option), or
-today's price embeds a dynamic the rule leaves out (the skew moving with the index). This is the depth pass's
-"mystery 1"; the v0.3.x vol model and the real-path test against VIX1Y are where it gets resolved.
+today's price embeds a dynamic the rule leaves out (the skew moving with the index). This is the project's
+first open mystery; the v0.3.x vol model and the real-path test against VIX1Y are where it gets resolved.
 
 Caveats: lognormal paths at one vol; fee taken by selling options, cash flat (sim.py's model, not the full fund
 engine); no FLEX trading costs, closure or roll scenarios; touch probabilities count every session, which is not a

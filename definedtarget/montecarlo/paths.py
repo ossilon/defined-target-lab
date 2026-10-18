@@ -93,9 +93,13 @@ def prepare(seed, npaths, times, mu, vol, barrier=None, checkpoints=(), path0=0,
     nsteps = t.size - 1
     _check(seed, path0, npaths, nsteps, stream)
     dt = np.diff(t)
+    if not all(isinstance(c, (int, np.integer)) and not isinstance(c, bool) for c in checkpoints):
+        raise ValueError("checkpoints are whole step numbers (int)")
     check = np.asarray(sorted(checkpoints), dtype=np.int64)
     if check.size and (check[0] < 1 or check[-1] > nsteps):
         raise ValueError("checkpoints are step numbers from 1 to nsteps")
+    if barrier is not None and not (math.isfinite(barrier) and barrier > 0):
+        raise ValueError("barrier must be a positive, finite multiple of the start level (or None)")
     b = NO_BARRIER if barrier is None else math.log(barrier)
     return (mu - 0.5 * vol * vol) * dt, vol * np.sqrt(dt), check, b
 

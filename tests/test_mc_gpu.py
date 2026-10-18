@@ -28,7 +28,7 @@ else:
     g = gpu.lognormal(77, 20_000, t, 0.0387, 0.166, **args)
     # The path arithmetic is identical; a rare tail normal (about 1 in 40,000, where AS241 calls log) rounds its last
     # digit differently on the GPU, so a few path values differ by about 1e-16 (diagnosed 2026-10-17: every differing
-    # path held a differing tail normal). Target from the v0.3 depth pass: within 1e-6 path by path; tested at 1e-12.
+    # path held a differing tail normal). Target from the v0.3 design review: within 1e-6 path by path; tested at 1e-12.
     for k in ("log_end", "log_max", "log_drawdown_end", "log_max_drawdown", "at_checkpoint"):
         d = float(np.nanmax(np.abs(cpu[k] - g[k])))
         same = float(np.mean(cpu[k] == g[k]))

@@ -107,9 +107,17 @@ for name, rule in (("dividing by the series length", lambda x: x / len(x)),
     bad = causal.check(rule, r)
     check(f"causal.check catches a rule that reads the series length: {name} ({len(bad)} cuts)",
           len(bad) > 0 and {f for _, _, f in bad} <= {"none", "longer"}, bad[:3])
+def needs_20_rows(x):
+    if len(x) < 20:
+        raise ValueError("need 20 rows")
+    return trailing_mean(x)
+
+
+raises("a rule that refuses short series gets a clear explanation, not a bare crash",
+       lambda: causal.check(needs_20_rows, r), "any length from 1 row up")
 t0 = __import__("time").perf_counter()
 causal.check(trailing_mean, r)
-check("checking 600 sessions at every cut point under 6 futures takes under 10 s",
+check("checking 600 sessions at every cut point under 8 futures takes under 10 s",
       __import__("time").perf_counter() - t0 < 10)
 c5 = causal.default_cuts(5000)
 check("longer series get 100 spread cut points plus the first and last", len(c5) == 101 and c5[0] == 0

@@ -44,7 +44,8 @@ percentile in 37-39% of windows. A history bootstrap is a shape, not a forecast;
 
 **6. No look-ahead.** Every engine reports at session k exactly what a run stopped at k reports, bit for bit, on the
 CPU and the GPU. `montecarlo.causal.check(rule, series)` tests any later trading rule the same way: it replaces the
-future after every cut point with six different futures (reversed, shuffled, flat, a crash, a spike, noise) and
+future after every cut point with eight different futures (reversed, shuffled, flat, a crash, a spike, noise, none
+at all, and a longer one) and
 requires every earlier decision to stay identical. It catches a centered average, tomorrow's value, a full-sample
 z-score, and rules that peek only on month-ends or only before a crash. It does not check execution timing, rules
 whose parameters were fitted on the whole history, or data revised or published late; the planned backtest toolkit

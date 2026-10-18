@@ -7,7 +7,7 @@ Inputs (your own copies; the repository ships no data): S&P 500 daily closes (CS
 data/external/spx_daily_library.csv) and Ken French's daily research factors (F-F_Research_Data_Factors_daily.csv
 from his data library at Dartmouth; market total return = Mkt-RF + RF; default data/external/).
 
-Fixed before the first run (2026-10-17; the split was approved in the v0.3 depth pass):
+Fixed before the first run (2026-10-17; the split was approved in the v0.3 design review):
 
 Part A, out-of-sample check. Generators are built ONLY from S&P 500 price log returns of 1950-01-03 to 1999-12-31:
 the lognormal with that period's daily mean and spread, and the bootstrap of that period at mean blocks of 21, 126

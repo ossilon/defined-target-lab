@@ -151,6 +151,15 @@ raises("a NaN time is refused", lambda: paths.lognormal(1, 1, [0, nan, 0.2], 0.0
 raises("a fractional seed is refused (not truncated)", lambda: paths.lognormal(1.5, 1, [0, 0.1], 0.0, 0.2), "whole numbers")
 raises("a fractional path count is refused", lambda: paths.lognormal(1, 2.0, [0, 0.1], 0.0, 0.2), "whole numbers")
 check("a numpy integer seed is fine", paths.lognormal(np.uint64(3), 2, [0, 0.1], 0.0, 0.2)["log_end"].size == 2)
+for bad_barrier in (nan, 0.0, -1.0, float("inf")):
+    raises(f"a barrier of {bad_barrier} is refused", lambda b=bad_barrier: paths.lognormal(1, 1, [0, 0.1], 0.0, 0.2, barrier=b),
+           "barrier must be")
+raises("a fractional checkpoint is refused (not truncated)",
+       lambda: paths.lognormal(1, 1, [0, 0.1, 0.2], 0.0, 0.2, checkpoints=[1.5]), "whole step numbers")
 from definedtarget.montecarlo import bootstrap as _bs  # noqa: E402
+raises("the bootstrap refuses a NaN barrier too", lambda: _bs.paths(1, 1, 2, np.ones((5, 1)) * 0.01, 2, barrier=nan),
+       "barrier must be")
+raises("the bootstrap refuses a fractional checkpoint", lambda: _bs.paths(1, 1, 2, np.ones((5, 1)) * 0.01, 2,
+                                                                          checkpoints=[1.5]), "whole step numbers")
 raises("equal_moments refuses a constant history", lambda: _bs.equal_moments(np.ones(10), 0.0, 0.01), "constant")
 raises("equal_moments refuses a NaN in the history", lambda: _bs.equal_moments([0.1, nan, 0.2], 0.0, 0.01), "finite")

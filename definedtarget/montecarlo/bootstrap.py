@@ -18,6 +18,8 @@ Plain words
 Measures (one pass, causal) are those of montecarlo.paths for column 0, plus each column's total over the path.
 Judged in tests/test_mc_bootstrap.py, including the exact variance formula of the bootstrap's sum.
 """
+import math
+
 import numba
 import numpy as np
 
@@ -109,9 +111,13 @@ def prepare(seed, npaths, nsteps, history, mean_block, barrier=None, checkpoints
     _check(seed, path0, npaths, nsteps, stream)
     if nsteps < 1:
         raise ValueError("nsteps must be at least 1")
+    if not all(isinstance(c, (int, np.integer)) and not isinstance(c, bool) for c in checkpoints):
+        raise ValueError("checkpoints are whole step numbers (int)")
     check = np.asarray(sorted(checkpoints), dtype=np.int64)
     if check.size and (check[0] < 1 or check[-1] > nsteps):
         raise ValueError("checkpoints are step numbers from 1 to nsteps")
+    if barrier is not None and not (math.isfinite(barrier) and barrier > 0):
+        raise ValueError("barrier must be a positive, finite multiple of the start level (or None)")
     b = NO_BARRIER if barrier is None else float(np.log(barrier))
     return d, p, check, b
 

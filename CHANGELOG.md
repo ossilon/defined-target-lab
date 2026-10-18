@@ -15,10 +15,12 @@ published table value in FINDINGS F15, F17, F18 and F19. Fixed from its findings
   output), `bootstrap_study.py` prints F15's two volatilities, and `scripts/billion_paths_demo.py` (seed 777) produces
   the billion-path figures (updated). F15's headline now names post-1950 S&P history (history since 1926 gives +6% to
   -14%); F17's touch change reads 2.7-3.8 points.
-- The engine refuses NaN or infinite vol, drift and times, a constant history in `equal_moments`, and fractional
-  seeds or path counts, instead of returning NaN or truncating.
-- `causal.check` also tries a future with no rows and one with twice the rows, so a rule that reads the series
-  length is caught.
+- The engine refuses NaN or infinite vol, drift and times, a NaN, infinite, zero or negative barrier, a constant
+  history in `equal_moments`, and fractional seeds, path counts or checkpoints, instead of returning NaN, a silent
+  wrong answer or a truncated number.
+- `causal.check` also tries a future with no rows and a longer one, so a rule that reads the series
+  length is caught; rules must therefore accept any length from 1 row up, and a rule that refuses a short series
+  gets an error that says so.
 - The forecast check: a PIT exactly at the first or last saved point interpolates, as FC1 rule 6 says (it returned
   0.0005 / 0.9995); the saved forecast also records the library versions and the SPY close's source; its test
   judges the forecasts with an independent scipy formula.
@@ -34,7 +36,8 @@ published table value in FINDINGS F15, F17, F18 and F19. Fixed from its findings
   against an exact answer (XX's NAV at the target depends only on SPY's level there): worst gap 0.0019 at 200,000
   paths.
 - **No look-ahead** (`montecarlo.causal`, tests/test_lookahead.py): `causal.check(rule, series)` replaces the
-  future after each cut point with six different futures (reversed, shuffled, flat, a crash, a spike, noise) and
+  future after each cut point with eight different futures (reversed, shuffled, flat, a crash, a spike, noise, none
+  at all, a longer one) and
   requires every earlier output to stay identical, bit for bit; series up to 1,000 rows are cut at every row. It
   passes causal rules and catches a centered average, tomorrow's value, a full-sample z-score, a one-row peek at
   the end, a peek on month-ends only (at exactly those 28 cuts) and a rule that peeks only when a crash is coming.
