@@ -105,6 +105,8 @@ def cmd_outcome(a, log, store):
     except ValueError as err:          # e.g. a void_events.csv row without its source
         print(f"cannot check the month for void events: {err}; nothing recorded")
         return 2
+    for n in notes:                     # show what the data flagged BEFORE the operator confirms (re-check of v0.3.0.1)
+        print(f"note from the data: {n}")
     if a.void:
         entry = fc.outcome_entry(record, void=a.void, review="void, recorded by the operator")
     elif found:

@@ -286,6 +286,39 @@ try:
                               ("2026-12-01", 1100.0, 0.0048)])
         check("a roll first seen on the target close T is found (the next close confirms it)",
               any("option line changed" in e for _, e in fc.events_between(date(2026, 10, 30), date(2026, 11, 30))[0]))
+        D_ = (date(2026, 10, 30), date(2026, 11, 30))
+        state(tmp / "S3", [("2026-10-30", 995.01, 0.0048), ("2026-11-27", 995.01, 0.0024),
+                           ("2026-11-30", 995.01, 0.0048), ("2026-12-01", 995.01, 0.0024)])
+        check("a real halving on T-1 followed by one bad file on T is still a void event (glitch not confirmed)",
+              len(fc.events_between(*D_)[0]) >= 1, fc.events_between(*D_))
+        state(tmp / "S4", [("2026-10-30", 995.01, 0.0048), ("2026-11-30", 995.01, 0.0024),
+                           ("2026-12-01", 995.01, 0.0048)])
+        check("a real halving ON T followed by one bad file on T+1 is still a void event",
+              len(fc.events_between(*D_)[0]) >= 1, fc.events_between(*D_))
+        state(tmp / "rollT_only", [("2026-10-30", 995.01, 0.0048), ("2026-11-30", 1100.0, 0.0048)])
+        check("a roll seen only on T, before the next file, is an unconfirmed event, not silence",
+              any("unconfirmed" in e for _, e in fc.events_between(*D_)[0]), fc.events_between(*D_))
+        state(tmp / "glitch_t", [("2026-10-29", 995.01, 0.0048), ("2026-10-30", 995.01, 0.0096),
+                                 ("2026-11-02", 995.01, 0.0048), ("2026-11-03", 995.01, 0.0048),
+                                 ("2026-11-30", 995.01, 0.0048), ("2026-12-01", 995.01, 0.0048)])
+        check("a confirmed glitch on the origin day itself is a note, not a false void the next day",
+              fc.events_between(*D_)[0] == [] and len(fc.events_between(*D_)[1]) == 1, fc.events_between(*D_))
+        gl = tmp / "glitch_cli"
+        data_folder(gl / "data")
+        (gl / "data" / "tables" / "xx_state.csv").write_text(
+            "as_of,strike,expiry,cash_per_share,nav_published,contracts_per_share,shares_outstanding\n"
+            "2026-10-30,995.01,2030-01-10,0.2474,26,0.0048,100000\n2026-11-10,995.01,2030-01-10,0.2474,26,0.0096,100000\n"
+            "2026-11-11,995.01,2030-01-10,0.2474,26,0.0048,100000\n2026-11-12,995.01,2030-01-10,0.2474,26,0.0048,100000\n"
+            "2026-11-30,995.01,2030-01-10,0.2474,27,0.0048,100000\n", encoding="utf-8")
+        os.environ["DEFINEDTARGET_DATA"] = str(gl / "data")
+        (gl / "store").mkdir()
+        (gl / "store" / "FC1_2026-10-30.json").write_bytes(fc.canonical(rec0))
+        fc.append_log(fc.forecast_entry(rec0, code={}), gl / "log.jsonl", now=datetime(2026, 11, 2, 15, tzinfo=timezone.utc))
+        import contextlib as _cl, io as _io
+        _buf = _io.StringIO()
+        with _cl.redirect_stdout(_buf):
+            cli.cmd_outcome(args(), gl / "log.jsonl", gl / "store")
+        check("the data's notes are printed before the operator is asked to confirm", "glitch" in _buf.getvalue())
         root = tmp / "lost"
         data_folder(root / "data")
         os.environ["DEFINEDTARGET_DATA"] = str(root / "data")

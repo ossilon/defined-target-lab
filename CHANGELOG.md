@@ -33,6 +33,10 @@ has no entries yet, so every FC1 fix applies from its first month.
   mark lateness at the session's end and print the right closing time (13:00 on 2029-07-03); the saved forecast
   carries the fingerprints of the code that computed it, so a recovered entry names that code; a logged forecast
   whose private file is lost is never recomputed (back up `data/forecasts/`).
+- From a confirmation of those fixes: a file glitch counts only when confirmed (one close off, then back for two
+  closes in a row), so a real split on T-1 or T followed by one bad file stays a void; a roll seen only on the
+  last close available is an unconfirmed event, not silence; a confirmed glitch on the origin day no longer
+  voids the month; and `outcome` prints the data's notes before asking the operator to confirm.
 
 ### Fixed: a published table
 - FINDINGS F18: each synthetic XX held half of XX's cash weight (0.45% instead of 0.94% at the start; the cash was

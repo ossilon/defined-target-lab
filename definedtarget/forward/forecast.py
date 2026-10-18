@@ -364,21 +364,30 @@ def events_between(t, T, root=None):
     s = s[(s["as_of"] >= lo) & (s["as_of"] <= hi)].sort_values("as_of").reset_index(drop=True)
     events = [(d, e) for d, e in verdicts.find_voids(s, root) if t < d <= T]
     notes = []
+    # A roll first seen on the last close available, with no next close yet, is unconfirmed but not silent
+    last = s.iloc[-1] if len(s) else None
+    if last is not None and t < last["as_of"] <= T:
+        line = verdicts._option_line(last)
+        if line is not None and line != (verdicts.XX_STRIKE, str(verdicts.XX_EXPIRY)):
+            events.append((last["as_of"], f"option line changed to {line[0]} {line[1]} (unconfirmed: wait for the "
+                                          "next close's file)"))
     if "contracts_per_share" in s.columns:
         c = s["contracts_per_share"].astype(float).to_numpy()
-        skip = set()
-        for i in range(1, len(s)):
-            d = s.loc[i, "as_of"]
-            if i in skip or not (t < d <= T) or not (c[i - 1] > 0 and abs(c[i] / c[i - 1] - 1.0) > OPTIONS_JUMP):
-                continue
-            move = f"options per share moved {c[i - 1]:.7f} -> {c[i]:.7f}"
-            if i + 1 < len(s) and abs(c[i + 1] / c[i - 1] - 1.0) <= OPTIONS_JUMP:
-                notes.append(f"{d} {move} for one session and moved back (a file glitch, not an event)")
-                skip.add(i + 1)                                  # the move back is part of the same glitch
-            elif i + 1 < len(s):
-                events.append((d, move))
-            else:
-                events.append((d, move + " (unconfirmed: wait for the next close's file)"))
+        same = lambda a, b: a > 0 and abs(b / a - 1.0) <= OPTIONS_JUMP  # noqa: E731
+        # A CONFIRMED glitch: one close off, then back for two closes in a row (the move back held). A move that
+        # reverts on the window's last close is not confirmed yet, so it stays an event (re-check of v0.3.0.1).
+        glitch = {j for j in range(1, len(s) - 2)
+                  if not same(c[j - 1], c[j]) and same(c[j - 1], c[j + 1]) and same(c[j - 1], c[j + 2])}
+        for j in sorted(glitch):
+            notes.append(f"{s.loc[j, 'as_of']} options per share {c[j - 1]:.7f} -> {c[j]:.7f} for one session, then "
+                         "back for two (a file glitch, not an event)")
+        kept = [i for i in range(len(s)) if i not in glitch]
+        for a, b in zip(kept, kept[1:]):
+            d = s.loc[b, "as_of"]
+            if t < d <= T and not same(c[a], c[b]):
+                move = f"options per share moved {c[a]:.7f} -> {c[b]:.7f}"
+                held = b + 1 < len(s) and same(c[b], c[b + 1])          # the new level held on the next close
+                events.append((d, move if held else move + " (unconfirmed: wait for the next close's file)"))
     return sorted(set(events)), notes
 
 
