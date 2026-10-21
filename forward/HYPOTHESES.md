@@ -1,7 +1,7 @@
 # Pre-registered predictions (forward test)
 
 Generated from `forward/predictions.jsonl` by `definedtarget.ledger.render()`; do not edit by hand.
-Chain check: **chain intact** (23 entries). README.md, "Check the freeze", shows how to verify that the entries existed before the data that tests them.
+Chain check: **chain intact** (25 entries). README.md, "Check the freeze", shows how to verify that the entries existed before the data that tests them.
 
 ## Protocol P1 (frozen 2026-10-14)
 
@@ -74,6 +74,8 @@ Chain check: **chain intact** (23 entries). README.md, "Check the freeze", shows
 | H19 | 2026-10-14 | The listed market gives better odds of finishing above 10,000 than the report's simple model: the volatility skew moves probability toward modest wins. | 2027-04-14 | open |
 | H1 | 2026-10-14 | Creation days inflate XX's mark, and it falls back the next day, so existing holders share the creation cost. | after the 15th creation event from 2026-10-14, or 2027-10-14 with 'inconclusive' if fewer | open |
 | H9 | 2026-10-14 | Heavy buying of XX raises the price of the calls it buys, relative to the listed market. | after the 15th creation event with chain data, or 2027-10-14 with 'inconclusive' if fewer | open |
+| H20 | 2026-10-21 | At three years, the listed S&P 500 options move sticky-strike: when the index moves, the at-the-money-forward vol of the Dec-2029 expiry changes by about one times its skew (a skew-stickiness ratio near 1, as stochastic-volatility models predict), not two or more (as local-volatility models predict). | 2027-04-15 | open |
+| H21 | 2026-10-21 | Between one and three years, the listed S&P 500 at-the-money skew falls with maturity no slower than the square-root law and no faster than one over maturity. | 2027-04-15 | open |
 
 ### H2: Options per share fall about 1% a year, through whole-contract sales that fund the fee.
 
@@ -234,3 +236,19 @@ Chain check: **chain intact** (23 entries). README.md, "Check the freeze", shows
 - **If it fails:** XX's flows stay too small to move the price of long-dated calls.
 - **Before the freeze (shaped the band; tests nothing):** No data yet; flows remain small (assets about $1.6 million).
 - **Review on:** after the 15th creation event with chain data, or 2027-10-14 with 'inconclusive' if fewer
+
+### H20: At three years, the listed S&P 500 options move sticky-strike: when the index moves, the at-the-money-forward vol of the Dec-2029 expiry changes by about one times its skew (a skew-stickiness ratio near 1, as stochastic-volatility models predict), not two or more (as local-volatility models predict).
+
+- **Test:** Closes with counted Dec-2029 quotes, 2026-11-02 to 2027-04-14 (at least 60). OLS, with an intercept, of the daily change in the Dec-2029 ATMF vol on the daily change in ln(S&P 500 close); the skew-stickiness ratio is the slope divided by the mean ATMF skew over the same closes. Reported with its standard error.
+- **Pass if:** The ratio lies between 0.5 and 1.5; inconclusive below 60 closes.
+- **If it fails:** Above 1.5, the 3-year vols move more with the index than stochastic-volatility dynamics allow (local-volatility-like); the v0.3.1 model needs that dynamic and the simulator's slide is closer to right. Below 0.5, the smile moves with the index (sticky delta): the fixed-strike vol of XX's option moves more than the model assumes.
+- **Before the freeze (shaped the band; tests nothing):** Bergomi, *Stochastic Volatility Modeling* (2016), ch. 2, and "Smile Dynamics IV" (Risk, 2009): sticky strike is a ratio of 1, sticky delta 0, local volatility 2 or more; sticky strike appears as the long-maturity limit of stochastic-volatility models. F12's fixed-strike slide (+1.1 points per -10%, against +4.6 for one-year index vol) is consistent with a ratio near 1 but does not measure it.
+- **Review on:** 2027-04-15
+
+### H21: Between one and three years, the listed S&P 500 at-the-money skew falls with maturity no slower than the square-root law and no faster than one over maturity.
+
+- **Test:** Closes with counted quotes for all three expiries Dec-2027, Dec-2028 and Dec-2029, 2026-11-02 to 2027-04-14 (at least 40). On each close, OLS of ln|S_T| on ln(T) across the three expiries (T in years to each expiry); the decay exponent is minus the slope. The median exponent across closes, with its bootstrap interval.
+- **Pass if:** The median exponent lies between 0.4 and 1.1; inconclusive below 40 closes.
+- **If it fails:** Below 0.4, long-dated skew decays more slowly than typical equity smiles: a two-factor or rough-volatility model is needed even at these maturities. Above 1.1, faster than any standard model predicts: check the data before concluding anything.
+- **Before the freeze (shaped the band; tests nothing):** Gatheral, *The Volatility Surface* (2006), ch. 3: in Heston the long-dated variance skew falls like 1/T (an exponent of 1 for the vol skew only at maturities long against the mean-reversion time; between 1 and 3 years Heston sits in transition, below 1). Bergomi (2016), ch. 2: typical equity smiles decay like T^-1/2. The band covers both; the measured exponent then decides how much the two-factor model is needed. Requires a new daily capture of the Dec-2027 and Dec-2028 strips (approved 2026-10-21), started after this freeze.
+- **Review on:** 2027-04-15
