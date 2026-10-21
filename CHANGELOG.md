@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.3.1 (in progress): the volatility release
+
+### Frozen (2026-10-21)
+- H20: the 3-year skew-stickiness ratio of the listed S&P 500 options lies between 0.5 and 1.5 (sticky strike).
+- H21: between one and three years, the ATM skew decays with an exponent between 0.4 and 1.1.
+  Both are tested on closes from 2026-11-02 to 2027-04-14 and reviewed on 2027-04-15.
+
+### Added: data (step 1)
+- Cboe VIX9D, VXN, SKEW and VVIX daily histories join the weekly capture.
+- `forward/strips.py`: a daily capture of one strike grid (6,500 to 10,000) at three expiries (Dec-2027, Dec-2028,
+  Dec-2029) for H20 and H21, with the feed's reported delay stored per reading; `cloud_import.import_strips` and
+  `scripts/import_captures.py` file the cloud replies.
+- `cloud_import`: a reply file whose name is not a read time is now refused on its own instead of stopping the import.
+
 ## v0.3.0.1 (2026-10-18)
 
 Fixes from an independent external audit of v0.3.0. The audit ran the full test suite on Linux (Python 3.10 and 3.12)

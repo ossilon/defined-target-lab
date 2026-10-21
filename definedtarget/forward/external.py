@@ -1,6 +1,7 @@
 """Public market series the engine needs, fetched the same way as the issuer files (raw bytes + manifest).
 
-- Cboe volatility indices (free daily history CSVs on cboe.com): VIX (30 days), VIX3M, VIX6M, VIX1Y.
+- Cboe volatility indices (free daily history CSVs on cboe.com): VIX (30 days), VIX3M, VIX6M, VIX1Y, VIX9D, VXN
+  (Nasdaq-100), SKEW (S&P 500 tail skew) and VVIX (the VIX's own implied vol).
   Cboe's terms apply; like everything in data/, the project never commits these files. Full histories, so a weekly
   refresh is enough (the newer copy supersedes the older one; both stay on disk).
 - US Treasury daily par yield curve (home.treasury.gov, public domain; the primary source of FRED's DGS series).
@@ -16,7 +17,9 @@ CBOE = "https://cdn.cboe.com/api/global/us_indices/daily_prices/{}_History.csv"
 TREASURY = ("https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/"
             "{y}/all?type=daily_treasury_yield_curve&field_tdr_date_value={y}&page&_format=csv")
 TREASURY_FIRST_YEAR = 2024        # enough for v0.1 pricing and the 2024+ listed-option calibration window
-CBOE_SERIES = ("VIX", "VIX3M", "VIX6M", "VIX1Y")
+# SKEW (from 1990) and VVIX (from 2006) are one value per day (header DATE,SKEW / DATE,VVIX); VXN (Nasdaq-100 30-day
+# implied vol, Cboe's file from 2009-09) and VIX9D (from 2011) have OHLC. Added 2026-10-21 for the v0.3.1 vol model.
+CBOE_SERIES = ("VIX", "VIX3M", "VIX6M", "VIX1Y", "VIX9D", "VXN", "SKEW", "VVIX")
 CBOE_REFRESH_DAYS = 7
 
 

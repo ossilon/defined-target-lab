@@ -12,7 +12,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
-from definedtarget.forward import cloud_import  # noqa: E402
+from definedtarget.forward import cloud_import, strips  # noqa: E402
 
 
 def main(argv):
@@ -22,7 +22,16 @@ def main(argv):
         return 1
     files = cloud_import.import_files(clone)
     quotes = cloud_import.import_quotes(clone)
+    grid = cloud_import.import_strips(clone)
     print(f"files: {files['imported']} imported, {files['already']} already here, {files['refused']} refused")
+    for g in grid:
+        if "refused" in g:
+            print(f"strips {g['file']}: REFUSED ({g['refused']})")
+        else:
+            counts = ", ".join(f"{code} {n}/{len(strips.STRIKES)}" for code, n in g["quoted"].items())
+            print(f"strips close {g['close']}: quoted {counts}")
+    if not grid:
+        print("strips: nothing new")
     for q in quotes:
         if "refused" in q:
             print(f"quotes {q['file']}: REFUSED ({q['refused']})")

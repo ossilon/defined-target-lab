@@ -4,6 +4,7 @@ The cloud routines write into the capture repository:
 - `roundhill/`: a data root of its own (`raw/manifest.jsonl` plus `raw/<source>/<UTC date>/<file>`), written by
   `roundhill.capture_all` and `cboe_flex.capture_all` exactly as on this computer.
 - `tradingview/spx_dec2029_calls/<read time UTC>.json`: each TradingView reply, unchanged.
+- `tradingview/spx_strips/<read time UTC>.json`: each reply of the three-expiry strike grid (H20, H21), unchanged.
 
 `import_files` copies every file the cloud saved into the local data root and appends its manifest record (marked
 "via": "cloud"); `import_quotes` files each reply through `listed.store`, with the read time from its file name, so
@@ -16,10 +17,11 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import fetch, listed
+from . import fetch, listed, strips
 
 CLOUD_DATA = "roundhill"                                   # the cloud routines' data root inside the repository
 QUOTES_DIR = Path("tradingview") / "spx_dec2029_calls"
+STRIPS_DIR = Path("tradingview") / "spx_strips"
 
 
 def _sha256(path):
@@ -82,16 +84,25 @@ def import_files(capture_repo, root=None):
     return counts
 
 
-def import_quotes(capture_repo, root=None):
-    """File each cloud TradingView reply through listed.store. Returns a list of store() summaries for new ones."""
+def _import_replies(folder, store, root):
     out = []
-    for path in sorted((Path(capture_repo) / QUOTES_DIR).glob("*.json")):
-        read_utc = datetime.strptime(path.stem, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+    for path in sorted(folder.glob("*.json")):
         try:
-            s = listed.store(path.read_text(encoding="utf-8"), read_utc, root=root)
-        except (ValueError, json.JSONDecodeError) as err:
+            read_utc = datetime.strptime(path.stem, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+            s = store(path.read_text(encoding="utf-8"), read_utc, root=root)
+        except (ValueError, json.JSONDecodeError) as err:     # a bad name or a bad reply: refuse that file only
             out.append({"file": path.name, "refused": str(err)})
             continue
         if s["new"]:
             out.append(s)
     return out
+
+
+def import_quotes(capture_repo, root=None):
+    """File each cloud TradingView reply through listed.store. Returns a list of store() summaries for new ones."""
+    return _import_replies(Path(capture_repo) / QUOTES_DIR, listed.store, root)
+
+
+def import_strips(capture_repo, root=None):
+    """File each cloud reply of the three-expiry grid through strips.store (same rules as import_quotes)."""
+    return _import_replies(Path(capture_repo) / STRIPS_DIR, strips.store, root)

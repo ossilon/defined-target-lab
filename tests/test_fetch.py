@@ -71,6 +71,8 @@ names = {name: rule for _, name, _, _, rule in external.series(T0)}
 check("current-year Treasury curve is fetched every run", names["par_yield_curve_2026.csv"] == "every_run")
 check("past Treasury years are fetched once", names["par_yield_curve_2024.csv"] == "once")
 check("Cboe volatility histories refresh weekly", names["VIX_History.csv"] == "weekly")
+check("the v0.3.1 Cboe series (VIX9D, VXN, SKEW, VVIX) are captured weekly like VIX",
+      all(names.get(f"{s}_History.csv") == "weekly" for s in ("VIX9D", "VXN", "SKEW", "VVIX")))
 check("VIX1Y is fetched every run (verdicts read only files captured by the review date)",
       names["VIX1Y_History.csv"] == "every_run")
 seen = [{"url": "u", "result": "saved", "fetched_utc": "2026-10-10T03:00:00Z"}]
