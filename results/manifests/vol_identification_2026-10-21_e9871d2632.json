@@ -1,0 +1,36 @@
+{
+ "argv": [],
+ "code": {
+  "definedtarget/__init__.py": "2c426c070e22a09e2a7bb68eae6e89c9093fb2f457b0cb418973946927c2e069",
+  "definedtarget/montecarlo/__init__.py": "1071aaadf944453a4820991835c86577f83918dc2b146c375e85ef5e8adcd339",
+  "definedtarget/montecarlo/manifest.py": "8b3c98f60d3dddc49053835191274a139b31241de4b806b76ef12b377e84f807",
+  "definedtarget/montecarlo/rng.py": "fcce8bb63e35a00ad7c7b36fddf3a7e347963c603d0f4c8147b32a718a251ebc",
+  "definedtarget/volmodel/__init__.py": "3e2e5c2ff7b11605b74baae3ef44e262c4544820c96a2b3b0d0bcc84ccabbbef",
+  "definedtarget/volmodel/black.py": "5e955bac679cbfb1e239d47d01dbb855b0e550bbb91a27a7b4299dd2e54dc593",
+  "definedtarget/volmodel/calibrate.py": "38a1168271ef6e043897bebfc142bb41f5eafb1b5ba0b2b0e0d119de3c310d84",
+  "definedtarget/volmodel/heston.py": "4ca0da167bc99fa346525449bb31ec0a00da9d23a4428c143966443dc5f11ff3",
+  "definedtarget/volmodel/pricers.py": "7d5a959431d1929ab85cfd502338047f5f426999061a030191e65f5511910132",
+  "scripts/vol_identification.py": "5c01983d5a9fc380932fadd3adef857288a8c71f31dcb523e08eb72e6686a0aa"
+ },
+ "date_utc": "2026-10-21",
+ "deterministic": true,
+ "inputs": {},
+ "kind": "run manifest",
+ "name": "vol_identification",
+ "output": {
+  "lines": 92,
+  "sha256": "e9871d2632a63e2d6f2a7dbc4dbe1178a74c0245fa77996bf87a9d3fa138214b"
+ },
+ "seconds": 55.3,
+ "seeds": [
+  20261021
+ ],
+ "settings": {},
+ "versions": {
+  "numba": "0.68.0",
+  "numpy": "2.5.3",
+  "python": "3.13.15",
+  "scipy": "1.18.1",
+  "system": "Windows"
+ }
+}

@@ -439,3 +439,52 @@ What it means: the listed call is traded, so under the option price's own (risk-
 mark cannot fall 5% by mid-life. If its strike vol truly followed the rule, today's price would already be lower than
 the constant-vol Black-76 value. The test: compare the listed call's real quotes since 2024 (the F12 data; H17 from
 2026-11-01) with both readings, in the v0.3.x vol study.
+
+**F20. The VIX family alone cannot pin down the long-run vol that a 3-year option depends on; the listed 3-year
+strikes can.** Measured 2026-10-21 (`scripts/vol_identification.py`; design fixed before the run, two reporting
+changes after it, both disclosed in the script; synthetic quotes only). 200 noisy copies of a 34-quote layout like
+this project's data (the VIX family at 9 days to 1 year; listed calls at 6,500-10,000 for Dec-2027, Dec-2028 and
+Dec-2029; XX's strikes 11,000-15,000 for Dec-2029), each fitted with the Heston model from one generic start:
+
+| Truth (long-run vol / vol at XX's strike) | Quotes fitted | Long-run vol, 5-95% | Vol at XX's strike (10,000, 3.17 years), 5-95% | Fits converged |
+|---|---|---|---|---|
+| Gatheral (2006) S&P 500 fit (18.81 / 13.56) | VIX family alone (a) | 17.53 to 25.68 | 12.52 to 14.23 | 200 |
+| | listed options alone | 17.90 to 20.04 | 13.34 to 13.76 | 200 |
+| | both | 18.24 to 19.53 | 13.46 to 13.64 | 200 |
+| Andersen (2008) Case III (30.00 / 23.55) | VIX family alone (a) | 0.00 to 63,183 | 16.25 to 29.99 (b) | 169 |
+| | listed options alone | 28.55 to 32.45 | 23.38 to 23.73 | 200 |
+| | both | 29.62 to 30.45 | 23.38 to 23.72 | 200 |
+
+(a) Vol of vol and correlation fixed at the truth, because no variance-swap rate depends on them; this flatters
+these rows. (b) 12 of the converged fits gave no vol at that strike.
+
+Why: a variance-swap rate depends only on today's variance, the long-run variance and the speed of mean reversion,
+and the VIX family stops at one year, so everything beyond is an extrapolation along one curve. When the term
+structure is flat (Case III starts at its long-run level) the speed is not identified at all, and the long-run level
+drifts with it. Adding the listed Dec-2027 to Dec-2029 strikes pins the vol at XX's strike to within 0.1-0.2 points
+(5-95%), given the model. So the open question for v0.3.1 is model error (can Heston fit the listed strikes and
+their dynamics at all?), not parameter noise. Where the parameters are identified, the fit's own standard errors
+match the spread of the estimates (speed of mean reversion, Gatheral truth, both quote sets: spread 0.200, reported
+0.212). Caveats: the noise levels (0.10 vol points for the indices; 0.10, 0.25 and 0.50 for the three expiries) are
+assumptions near half a bid-ask spread, not measurements; the noise is independent and normal; the model is right by
+construction.
+
+**F21. The COS pricing method's standard reference needs two corrections for long-dated Heston options.** Found
+2026-10-21 while building `definedtarget/volmodel` (tests in `tests/test_vol_heston.py` and
+`tests/test_vol_pricers.py`). Fang and Oosterlee (2008), the paper that introduced the COS method:
+1. Its Table 11 prints the variance of the Heston log-price with the term theta (6 e^{-kappa T} - 7); the correct
+   term is theta (4 e^{-kappa T} - 5). The printed form disagrees with the numerical derivatives of the
+   characteristic function (by up to 223% in our test cases), has a term of order T that no variance can have at
+   short maturities, and turns negative, which matches the paper's own remark that it "may become negative". The
+   corrected form equals Andersen's (2008, Table A.1) independent formula to rounding. The paper uses this value only
+   to size its integration range, so its prices are unaffected.
+2. Its integration range, the mean plus or minus 12 standard deviations, is too narrow for Heston's exponential tails
+   at long maturities: with the correct variance it prices the December 2029 10,000 call 0.38 too low under
+   Andersen's Case I (a published stress case), and 4e-5 too low at the paper's own one-year test. The package sizes
+   the range instead with Chernoff's bound from the model's moment generating function, so that each tail holds at
+   most 1e-15 of the probability; the COS price and an independent Lewis-Lipton integral (Andersen 2008,
+   Proposition 3) then agree to about 1e-14 of the forward on every case tested.
+
+Also: at the paper's one-year Heston test, three methods here (COS, Gauss-Legendre and scipy's adaptive quadrature
+of the integral) agree with each other to 1e-14 and sit 1.6e-8 below the paper's printed reference value, which
+came from a Carr-Madan run on a fixed grid; at ten years they match the paper's reference to 3.5e-10.

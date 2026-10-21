@@ -14,6 +14,19 @@
   `scripts/import_captures.py` file the cloud replies.
 - `cloud_import`: a reply file whose name is not a read time is now refused on its own instead of stopping the import.
 
+### Added: the volatility package, closed-form judges first (step 2)
+- `definedtarget/volmodel/` (imports only the standard library, numpy, numba and scipy):
+  - `heston`: the Heston model, its characteristic function in the continuous form, and its moments;
+  - `pricers`: two independent European pricers, COS and the Lewis-Lipton integral, plus a checked price that
+    requires them to agree; the COS range comes from Chernoff's bound, not the paper's 12 standard deviations;
+  - `varswap`: the log-strip of option prices and the Heston VIX identity VIX^2 = a + b v0;
+  - `black`: a copy of Black-76 and its implied vol, kept bit-identical to `definedtarget.pricing`;
+  - `calibrate`: a Levenberg-Marquardt Heston fit with standard errors and the correlation of the estimates.
+- Tests: `test_vol_heston`, `test_vol_pricers`, `test_vol_varswap`, `test_vol_black` and `test_vol_calibrate`.
+- `scripts/vol_identification.py` and FINDINGS F20: what this project's quote layout can identify.
+- FINDINGS F21: two corrections to the COS method's standard reference for long-dated Heston options.
+- `docs/MODELS.md`: the mathematics and sources, starting with the volatility model.
+
 ## v0.3.0.1 (2026-10-18)
 
 Fixes from an independent external audit of v0.3.0. The audit ran the full test suite on Linux (Python 3.10 and 3.12)
