@@ -1,165 +1,285 @@
 # The models, with their mathematics and sources
 
-This file explains each mathematical model in the project: what it assumes, the formulas the code uses, how the
-code is checked, and where each formula comes from. It grows with the code. v0.3.1 adds the volatility model,
-section by section as each part is built; v0.3.3 adds the earlier models (Black-76 pricing, the fund engine, the
-Monte Carlo engine and the bootstrap). Notation follows the code. Time is in years; a variance of 0.04 is a
-volatility of 20%.
+This file explains each mathematical model in the project. For each model it gives the assumptions, the formulas
+that the code uses, the tests that check the code, and the source of each formula. The file grows with the code.
+Release v0.3.1 adds the volatility model, one part at a time. Release v0.3.3 adds the earlier models: Black-76
+pricing, the fund engine, the Monte Carlo engine and the bootstrap.
+
+The notation follows the code. Time is in years. A variance of 0.04 is a volatility of 20%.
 
 ## 1. The volatility model (v0.3.1, in progress)
 
-Package: `definedtarget/volmodel/`. It imports only Python's standard library, numpy, numba and scipy, never the
-rest of the project, so other projects can use it unchanged. Its interface may change until v0.3.3.
+The package is `definedtarget/volmodel/`. It imports only the Python standard library, numpy, numba, scipy and the
+sibling Monte Carlo package. It never imports the rest of this project, so other projects can use it as it is. Its
+interface can change until v0.3.3.
 
-Why XX needs it. XX holds one 3-year call on SPY, struck 28% above the index. Its value moves with the index and
-with the market's long-dated implied volatility at that strike (about 10% of NAV per vol point, FINDINGS S1). The
-simulators so far used one vol, or one vol with a fixed "slide" as the index moves. F17 showed that the slide rule
-breaks a basic consistency test (the discounted mark must not drift), so the project needs a model in which the
-index and its variance move together and every option price comes from the same model.
+Why XX needs it. XX holds one 3-year call on SPY with a strike 28% above the index. The value of XX moves with the
+index. It also moves with the long-dated implied volatility at that strike: about 10% of the NAV for each vol point
+(FINDINGS S1).
+
+The earlier simulators used one vol, or one vol with a fixed slide when the index moves. F17 shows that the slide
+rule fails a basic test: the discounted mark of a traded option must not drift. So the project needs a model in
+which the index and its variance move together, and in which one model gives every option price.
 
 ### 1.1 The Heston model
 
-Under the pricing measure, in forward terms (F_T is the forward for expiry T, X_T = ln(S_T / F_T)):
+The model works under the pricing measure and in forward terms. F_T is the forward for expiry T, and
+X_T = ln(S_T / F_T).
 
-    dS / S = sqrt(v) dW1        dv = kappa (theta - v) dt + eta sqrt(v) dW2        dW1 dW2 = rho dt
+```math
+\frac{dS}{S} = \sqrt{v}\,dW_1, \qquad dv = \kappa(\theta - v)\,dt + \eta\sqrt{v}\,dW_2, \qquad dW_1\,dW_2 = \rho\,dt
+```
 
-| Parameter | Meaning | Typical S&P 500 value (Gatheral 2006, Table 3.2) |
+| Parameter | Meaning | A typical S&P 500 value (Gatheral 2006, Table 3.2) |
 |---|---|---|
-| v0 | variance now | 0.0174 (13.2% vol) |
-| theta | long-run variance | 0.0354 (18.8% vol) |
-| kappa | speed of mean reversion, per year | 1.33 (half-life of a variance shock about 6 months) |
-| eta | vol of variance | 0.39 |
-| rho | correlation of index and variance shocks | -0.72 (variance tends to rise when the index falls) |
+| v0 | the variance now | 0.0174 (a vol of 13.2%) |
+| theta | the long-run variance | 0.0354 (a vol of 18.8%) |
+| kappa | the speed of mean reversion, each year | 1.33 (a variance shock loses half its size in about 6 months) |
+| eta | the vol of the variance | 0.39 |
+| rho | the correlation of the index shocks and the variance shocks | -0.72 (the variance tends to rise when the index falls) |
 
-The Feller condition 2 kappa theta >= eta^2 keeps the variance away from zero. Fits to index options usually break
-it (the values above give 0.62), so the code reports it and does not require it. Source: Heston (1993).
+The Feller condition, 2 kappa theta >= eta^2, keeps the variance away from zero. Fits to index options usually fail
+this condition: the values above give 0.62. So the code reports the condition but does not require it. The source
+of the model is Heston (1993).
 
 ### 1.2 The characteristic function
 
-Everything else is built on phi(u) = E[exp(i u X_T)], known in closed form (Heston 1993). With
-beta = kappa - i rho eta u and d = sqrt(beta^2 + eta^2 (u^2 + i u)) (principal square root),
+All other parts of the model use the characteristic function phi(u) = E[exp(i u X_T)]. Heston (1993) gives it in
+closed form:
 
-    g = (beta - d) / (beta + d)
-    D = (beta - d) / eta^2 * (1 - e^{-dT}) / (1 - g e^{-dT})
-    C = kappa theta / eta^2 * [ (beta - d) T - 2 ln( (1 - g e^{-dT}) / (1 - g) ) ]
-    phi(u) = exp(C + D v0)
+```math
+\beta = \kappa - i\rho\eta u, \qquad d = \sqrt{\beta^2 + \eta^2 (u^2 + i u)}, \qquad g = \frac{\beta - d}{\beta + d}
+```
 
-This is the form in Gatheral (2006, eq. 2.12) and Fang and Oosterlee (2008, section 3.3). Heston's original form
-writes the same function with e^{+dT}; with the principal logarithm it jumps whenever the logarithm's argument crosses
-the negative real axis, which happens at long maturities ("the little Heston trap", Albrecher et al. 2007). Lord and
-Kahl (2008) proved that the form above, with the principal logarithm, gives the correct function (as cited by Fang
-and Oosterlee 2008). The tests show both behaviors: for Andersen's (2008) Case I at
-10 years the original form jumps near u = 0.2, and the form above does not.
+```math
+D = \frac{\beta - d}{\eta^2}\,\frac{1 - e^{-dT}}{1 - g e^{-dT}}, \qquad
+C = \frac{\kappa\theta}{\eta^2}\left[(\beta - d)\,T - 2\ln\frac{1 - g e^{-dT}}{1 - g}\right], \qquad
+\phi(u) = e^{C + D v_0}
+```
 
-Checks in `tests/test_vol_heston.py`: phi(0) = 1; phi(-i) = 1 (the forward is a martingale); |phi| <= 1 and
-phi(-u) = conj(phi(u)) on the real line; as eta goes to 0 with rho = 0, phi tends to the normal characteristic
-function of a deterministic-variance model, with a gap that shrinks like eta^2.
+The square root is the principal root. This form is the one in Gatheral (2006, equation 2.12) and in Fang and
+Oosterlee (2008, section 3.3).
 
-### 1.3 Moments
+The original form of Heston writes the same function with e^{+dT}. With the principal logarithm, that form jumps
+when the argument of the logarithm crosses the negative real axis. This happens at long maturities (Albrecher et al.
+2007, "the little Heston trap"). Lord and Kahl (2008) prove that the form above gives the correct function, as Fang
+and Oosterlee cite.
 
-Expected total variance from now to T (Gatheral 2006, ch. 11):
+The tests in `tests/test_vol_heston.py` check these properties:
+- phi(0) = 1, and phi(-i) = 1, so the forward is a martingale;
+- the absolute value of phi is at most 1 on the real line, and phi(-u) is the conjugate of phi(u);
+- the original form jumps near u = 0.2 for Case I of Andersen (2008) at 10 years, and the form above does not;
+- when eta goes to 0 with rho = 0, phi goes to the normal characteristic function, and the gap falls like eta^2.
 
-    E[W_T] = theta T + (v0 - theta) (1 - e^{-kappa T}) / kappa
+### 1.3 The moments
 
-It does not depend on eta or rho. The mean of X_T is -E[W_T] / 2. The variance of X_T is Andersen's (2008,
-Table A.1) closed form. Fang and Oosterlee (2008, Table 11) print the same variance with the term
-theta (6 e^{-kappa T} - 7) where theta (4 e^{-kappa T} - 5) is correct (FINDINGS F21); the tests check Andersen's
-form against numerical derivatives of log phi (bound 1e-7; observed below 1e-8).
+The expected total variance from now to T comes from Gatheral (2006, ch. 11):
+
+```math
+E[W_T] = \theta T + (v_0 - \theta)\,\frac{1 - e^{-\kappa T}}{\kappa}
+```
+
+It does not depend on eta or rho. The mean of X_T is -E[W_T] / 2. The variance of X_T is the closed form of
+Andersen (2008, Table A.1).
+
+Fang and Oosterlee (2008, Table 11) print the same variance with an error. Their term theta (6 e^{-kappa T} - 7)
+must be theta (4 e^{-kappa T} - 5) (FINDINGS F21). The tests compare the variance of Andersen with the numerical
+derivatives of log phi. The limit is 1e-7, and the largest difference is below 1e-8.
 
 ### 1.4 Two option pricers
 
-Inputs are in forward terms: the forward F, strikes K, maturity T and the discount factor DF. Prices are per unit of
-the underlying.
+The inputs are in forward terms: the forward F, the strikes K, the maturity T and the discount factor DF. The
+prices are for one unit of the underlying.
 
-Pricer 1, the COS method (Fang and Oosterlee 2008). The density of X_T on a range [A, B] is replaced by its
-Fourier-cosine series. The series coefficients come straight from phi, and the payoff's coefficients are closed
-forms, so a European put is
+The first pricer is the COS method of Fang and Oosterlee (2008). It replaces the density of X_T on a range [A, B]
+with its Fourier-cosine series. The coefficients of the series come directly from phi. The coefficients of the
+payoff have closed forms. A European put is then:
 
-    P = DF K sum'_{k=0}^{N-1} Re[ phi(k pi / (B - A)) e^{-i k pi A / (B - A)} ] U_k(K)
+```math
+P = DF\,K \sum_{k=0}^{N-1}{}' \,\mathrm{Re}\!\left[\phi\!\left(\frac{k\pi}{B - A}\right) e^{-ik\pi A/(B - A)}\right] U_k(K)
+```
 
-where sum' counts the first term half and U_k is the put payoff's cosine coefficient on the part of [A, B] below the
-strike. Calls follow by put-call parity, which the paper recommends because a call's payoff grows without bound. N
-doubles from 64 until the added terms fall below 1e-14 of the forward.
+The prime on the sum gives the first term half its weight. U_k is the cosine coefficient of the put payoff on the
+part of [A, B] below the strike. Calls come from put-call parity, as the paper recommends. The number of terms N
+doubles from 64 until the new terms add less than 1e-14 of the forward.
 
-The range is where this code departs from the paper. The paper uses the mean plus or minus 12 standard deviations.
-Heston's left tail is exponential, not normal, and at long maturities that range cuts off real probability: 0.38 too
-low for the December 2029 10,000 call under Andersen's Case I (FINDINGS F21). The code instead bounds each tail with
-Chernoff's inequality,
+The range [A, B] is different from the range in the paper. The paper uses the mean plus or minus 12 standard
+deviations. The left tail of Heston is exponential, not normal. At long maturities that range cuts off real
+probability. For example, it gives a price 0.38 too low for the December 2029 10,000 call under Case I of Andersen
+(FINDINGS F21). The code bounds each tail with the inequality of Chernoff instead:
 
-    P(X_T > B) <= E[e^{sX_T}] e^{-sB}  for s > 0,  and the mirror image for the left tail,
+```math
+P(X_T > B) \le E\!\left[e^{sX_T}\right] e^{-sB} \quad \text{for } s > 0 \text{, and the mirror image for the left tail}
+```
 
-minimized over s up to the point where the moment E[e^{sX_T}] becomes infinite (the moment explosion; the code finds
-it as the first point where the closed form stops being finite, real and convex). The range then holds all but 1e-15
-of the probability on each side, whatever the shape of the distribution.
+The code takes the smallest bound over s, up to the moment explosion. At that point E[e^{sX_T}] becomes infinite.
+The code finds it as the first point where the closed form is no longer finite, real and convex. The range then
+holds all but 1e-15 of the probability on each side, for any shape of the distribution.
 
-Pricer 2, the Lewis-Lipton integral (Lewis 2001; Lipton 2002), in Andersen's (2008, Proposition 3) notation:
+The second pricer is the Lewis-Lipton integral (Lewis 2001; Lipton 2002), in the notation of Andersen (2008,
+Proposition 3):
 
-    C = DF ( F - (K / pi) int_0^inf Re[ exp( (1/2 - i k) ln(F/K) + h1(k) - (k^2 + 1/4) h2(k) v0 ) ] / (k^2 + 1/4) dk )
+```math
+C = DF\left(F - \frac{K}{\pi}\int_0^\infty
+\frac{\mathrm{Re}\!\left[\exp\!\left((\tfrac{1}{2} - ik)\ln\tfrac{F}{K} + h_1(k) - (k^2 + \tfrac{1}{4})\,h_2(k)\,v_0\right)\right]}
+{k^2 + \tfrac{1}{4}}\,dk\right)
+```
 
-with h1 and h2 from Andersen's own algebra, so this pricer shares no characteristic-function code with the first. The
-integral uses 24-point Gauss-Legendre panels until the integrand's decaying envelope falls below 1e-14. Its puts come
-from parity, so deep out-of-the-money puts lose relative accuracy; the COS pricer handles those.
+The functions h1 and h2 come from the algebra of Andersen. So this pricer shares no code with the first pricer for
+the characteristic function. The code integrates with 24-point Gauss-Legendre panels until the decay of the
+integrand makes the rest smaller than 1e-14. This pricer gets its puts from parity. So deep out-of-the-money puts
+lose relative accuracy here, and the COS pricer gives those puts.
 
-A checked price (`pricers.prices(..., check=True)`) returns the COS price only if the two pricers agree within 1e-9
-of the discounted forward, and raises otherwise.
+A checked price, `pricers.prices(..., check=True)`, gives the COS price only when the two pricers agree within 1e-9
+of the discounted forward. If they do not agree, it stops with an error.
 
-Checks in `tests/test_vol_pricers.py`:
-- Fang and Oosterlee's reference values: within 3.5e-10 at 10 years; at one year all three methods here agree to
-  1e-14 and sit 1.6e-8 below the printed reference (FINDINGS F21); their Black-Scholes values to 1e-9.
-- The two pricers agree within 1e-10 of the forward (in practice about 1e-14) for five parameter sets, six
-  maturities from 9 days to 10 years, and 41 strikes spanning 4 standard deviations, including XX's strike.
-- scipy's adaptive quadrature of the same integral agrees to 1e-10.
-- No arbitrage: call prices lie between DF max(F - K, 0) and DF F, fall as the strike rises, and are convex.
-- The lognormal limit, a wider range moving no price, and Lee's (2004) wing bound (implied total variance per unit
-  of log-moneyness below 2).
+The tests in `tests/test_vol_pricers.py` check these properties:
+- The reference values of Fang and Oosterlee agree within 3.5e-10 at 10 years and within 1e-9 for their Black-Scholes
+  cases.
+- At one year, three methods here agree to 1e-14, and they are 1.6e-8 below the printed reference (FINDINGS F21).
+- The two pricers agree within 1e-10 of the forward for five parameter sets, six maturities and 41 strikes. The
+  strikes include the strike of XX. In practice the difference is about 1e-14.
+- The adaptive quadrature of scipy gives the same integral within 1e-10.
+- Each call price lies between DF max(F - K, 0) and DF F, falls when the strike rises, and is convex in the strike.
+- The prices go to Black-76 in the lognormal limit, a wider range changes no price, and the wings obey the bound of
+  Lee (2004).
 
 ### 1.5 Variance swaps and the VIX family
 
-For any diffusion the fair variance-swap rate equals a strip of out-of-the-money options weighted by 1/K^2
-(Demeterfi, Derman, Kamal and Zou 1999; Gatheral 2006, ch. 11):
+For any diffusion, the fair rate of a variance swap is equal to a strip of out-of-the-money options. Each option
+has the weight 1/K^2 (Demeterfi, Derman, Kamal and Zou 1999; Gatheral 2006, ch. 11):
 
-    E[W_T] = -2 E[ln(S_T / F)] = (2 / DF) [ int_0^F P(K) / K^2 dK + int_F^inf C(K) / K^2 dK ]
+```math
+E[W_T] = -2\,E\!\left[\ln\frac{S_T}{F}\right] = \frac{2}{DF}\left[\int_0^F \frac{P(K)}{K^2}\,dK + \int_F^\infty \frac{C(K)}{K^2}\,dK\right]
+```
 
-Cboe's VIX is 100 times the square root of a 30-day rate computed from a discrete version of this strip on listed
-S&P 500 options; VIX9D, VIX3M, VIX6M and VIX1Y do the same at other tenors. In Heston the rate is linear in today's
-variance:
+The VIX of Cboe is 100 times the square root of a 30-day rate. Cboe computes it from a discrete version of this
+strip on listed S&P 500 options. VIX9D, VIX3M, VIX6M and VIX1Y do the same at other tenors. In Heston the rate is a
+linear function of the variance now:
 
-    VIX^2(tau) = a + b v0,   b = (1 - e^{-kappa tau}) / (kappa tau),   a = theta (1 - b)
+```math
+\mathrm{VIX}^2(\tau) = a + b\,v_0, \qquad b = \frac{1 - e^{-\kappa\tau}}{\kappa\tau}, \qquad a = \theta\,(1 - b)
+```
 
-`varswap.strip_variance` computes the strip from any price function. Integrated over the model's own prices, it
-must reproduce E[W_T]; `tests/test_vol_varswap.py` checks this to 1e-9 for 22 cases, so the whole smile, wings
-included, is judged by one closed form. Cboe's exact discretization is applied when the model is fitted to the real
-VIX family (v0.3.1 step 4).
+The function `varswap.strip_variance` computes the strip from any price function. For the prices of the model, the
+strip must give E[W_T]. The file `tests/test_vol_varswap.py` checks this to 1e-9 in 22 cases. So one closed form
+checks the whole smile, the wings included. The fit to the real VIX family uses the discrete method of Cboe (v0.3.1,
+step 4).
 
-Because the rate does not depend on eta or rho, the VIX family can identify only v0, theta and kappa, and only up
-to its longest tenor, one year (section 1.6).
+The rate does not depend on eta or rho. So the VIX family can identify only v0, theta and kappa. It can identify
+them only up to its longest tenor, one year (section 1.6).
 
-### 1.6 Fitting the model, and what the data can identify
+### 1.6 The fit, and what the data can identify
 
-`calibrate.fit_heston` minimizes sum(((model vol - market vol) / sd)^2) over listed implied vols and vol-index
-levels, with sd each quote's noise in vol units. The parameters move on an unconstrained scale (logarithms, and the
-inverse hyperbolic tangent for rho), so every trial point is a valid model; any of them can be held fixed. The
-solver is Levenberg-Marquardt (Levenberg 1944; Marquardt 1963) with central-difference derivatives. Standard errors
-come from (J^T J)^{-1} at the answer, carried to the natural scale by the chain rule; a parameter that no quote
-depends on gets an infinite standard error.
+The function `calibrate.fit_heston` minimizes the sum of ((model vol - market vol) / sd)^2. The quotes are listed
+implied vols and the levels of vol indices. Each quote has a noise sd in vol units. The parameters move on a scale
+without limits: logarithms, and the inverse hyperbolic tangent for rho. So each trial point is a valid model. The
+fit can hold any parameter fixed.
 
-Checks in `tests/test_vol_calibrate.py`: Rosenbrock's valley and a linear problem; exact recovery of Gatheral's
-parameters from noise-free quotes laid out like the project's data, from three starts; agreement with scipy's
-`least_squares`; and the VIX-only case, where eta and rho come out unidentified as they should.
+The solver is Levenberg-Marquardt (Levenberg 1944; Marquardt 1963) with derivatives from central differences. The
+standard errors come from the inverse of J^T J at the answer, and the chain rule takes them to the natural scale. A
+parameter that no quote depends on gets an infinite standard error.
 
-What the data can identify (FINDINGS F20, from 200 noisy synthetic copies of that layout): the VIX family alone
-leaves the long-run vol wide open (for the Gatheral truth, 17.5 to 25.7 vol points, 5-95%), while adding the listed
-Dec-2027 to Dec-2029 strikes pins the vol at XX's strike to within about 0.1 vol points. The remaining question is
-therefore whether the model fits the listed strikes and their day-to-day moves at all, which the frozen predictions
-H20 and H21 and the v0.3.1 fit test out of sample.
+The tests in `tests/test_vol_calibrate.py` check these properties:
+- the solver finds the answer of the Rosenbrock valley and of a linear problem;
+- the fit recovers the parameters of Gatheral exactly from quotes without noise, from three starts;
+- the fit agrees with `least_squares` of scipy;
+- with only the VIX family, the fit reports eta and rho as unidentified, as it must.
 
-### 1.7 Not built yet
+FINDINGS F20 shows what the data can identify. It uses 200 noisy synthetic copies of the quotes of this project. The
+VIX family alone leaves the long-run vol wide open. For the parameters of Gatheral, the range is 17.5 to 25.7 vol
+points (5% to 95%).
 
-- Simulation of the index and its variance together (Andersen's 2008 quadratic-exponential scheme with its
-  martingale correction), judged against the two pricers: v0.3.1 step 3.
-- The fit to the real VIX family and listed strikes under the fixed holdout, and the out-of-sample accuracy target:
-  step 4.
-- A two-factor variance model (Bergomi 2005), for the term structure one speed cannot fit: step 5.
+With the listed strikes of December 2027 to December 2029, the fit pins the vol at the strike of XX to
+about 0.1 vol points. The open question is therefore whether the model fits the listed strikes and their daily
+moves. The frozen predictions H20 and H21 and the out-of-sample fit of v0.3.1 test this.
+
+### 1.7 The simulation of paths
+
+The function `stochvol.simulate` makes Heston paths on any increasing time grid, the real NYSE calendar included.
+Each step moves the variance v first and then the log index x. Each path keeps a few numbers, as in
+`montecarlo.paths`. These are the end values, the integrated variance, the highest close and the drawdowns. They
+also include the first close at a barrier and the values at chosen checkpoints.
+
+The default scheme is the quadratic-exponential (QE) scheme of Andersen (2008) with his martingale correction
+(QE-M). These are its three parts:
+1. The next variance matches the exact conditional mean m and variance s^2 of the square-root process (his
+   equations 17 and 18). If psi = s^2 / m^2 is at most 1.5, the next variance is a (b + Z)^2 with a normal Z
+   (equations 23, 27 and 28). Otherwise it is 0 with probability p and exponential in the other cases (equations 24
+   to 26, 29 and 30). This handles the mass near zero that breaks Euler schemes when the Feller condition fails.
+2. The log index uses the exact relation between the increments of the index and of the variance (equation 11).
+   The integral of v over the step uses the trapezoid rule (equations 32 and 33).
+3. The martingale correction changes one constant of the step so that E[S(t + dt) | S(t)] = S(t) e^(mu dt) exactly
+   (his Propositions 7 and 9).
+
+```math
+x_{t+\Delta} = x_t + \mu\Delta + K_0^* + K_1 v_t + K_2 v_{t+\Delta} + \sqrt{K_3 v_t + K_4 v_{t+\Delta}}\;Z
+```
+
+The correction exists only if A < 1/(2a) in the quadratic branch, or A < beta in the exponential branch. For
+rho <= 0 these conditions are always true. A search over a wide range of positive rho found no case that fails them.
+The code still counts each step that fails, and then stops with an error. The scheme "qe" omits the correction. The
+scheme "euler" is the full-truncation Euler scheme (his equations 6 and 7), which the code keeps only for
+comparison.
+
+With eta = 0, the variance follows its mean path and each step is lognormal. This is the lognormal limit. With
+v0 = theta it is `montecarlo.paths.lognormal`, number for number.
+
+The random numbers come from the engine. Draw k of a path on stream s drives the index at step k, as in
+`montecarlo.paths`, and the variance uses stream s + 1. Each draw has an address (seed, path, draw, stream). So the
+paths do not depend on the number of threads or on the size of the chunks.
+
+The tests in `tests/test_vol_stochvol.py` check these properties:
+- In the lognormal limit, each shared output is equal to `montecarlo.paths.lognormal` bit for bit, on the real
+  calendar.
+- One QE step matches the conditional mean and variance in both branches.
+- E[V_T] and Var[V_T] equal the closed forms of Andersen at any step size, and E[S_T] = S_0 e^(mu T).
+- The code reproduces 13 biases from the tables of Andersen within 3 combined standard errors, for the Euler, QE and
+  QE-M schemes.
+- At fine steps, QE-M gives the exact prices within 3 standard errors, and on the daily calendar at the strike of XX.
+- The paths are bit-identical in one call or in chunks, and with one thread or with all threads.
+
+### 1.8 Price tables
+
+A path kernel cannot call a Fourier pricer at each step of a million paths. So `pricetable.build` makes a table for
+one remaining maturity tau. The table holds the implied vol of the model on a grid of log-moneyness k = ln(K / F)
+and of vol s = sqrt(v). The function `pricers.cos_call_surface` gives all the prices of the table in one
+calculation. This works because log phi = C + D v, and C and D do not depend on v.
+
+A call is then Black-76 at the interpolated implied vol. The interpolation is a local cubic (Catmull-Rom) in k and
+in s. Implied vols are smooth even near expiry, where prices bend sharply at the strike. The table has one extra row
+and one extra column at each outer edge, so that each cell has its full stencil. Below s = 0 the table uses the row
+at s = ds, because the vol depends on v = s^2 and is symmetric in s.
+
+Below the strike range the call has its intrinsic value, and above the range it is 0. The default range is k from
+-3 to 2. A vol above the top of the grid takes the top value.
+
+The tests in `tests/test_vol_pricetable.py` check these properties:
+- the surface agrees with the one-at-a-time pricer to 1e-12;
+- the table gives the direct COS price within 2e-6 per unit of the forward, at 400 random points;
+- this holds at four maturities from one week to 3.2 years;
+- the marked option is a martingale along simulated paths (section 1.9).
+
+### 1.9 The error of the simulation, and the martingale identity
+
+The script `scripts/qe_bias_study.py` measures two things for the December 2029 10,000 call under the parameters of
+Gatheral (FINDINGS F22). It uses 16,777,216 paths for each case.
+1. The bias of the scheme. On daily steps the bias of QE-M is 0.0006 vol points, and the standard error is 0.0037.
+   On steps of 63 sessions the bias of QE-M stays below 0.03 vol points. The Euler scheme reaches 0.35 vol points
+   on those steps.
+2. The martingale identity. The table marks the call along daily QE-M paths. Its expected value at 0.5, 1.5 and 2.5
+   years stays within 1.1 standard errors of the price now. Each standard error is at most 0.05% of the price. The
+   slide rule gave a drift of -5.55% for the same option at mid-life (FINDINGS F19).
+
+So the drift of F17 is a property of the slide rule. A model in which the index and its variance move together does
+not have it.
+
+### 1.10 Parts not built yet
+
+- The fit to the real VIX family and to the listed strikes under the fixed holdout, with the out-of-sample accuracy
+  target (v0.3.1, step 4).
+- A two-factor variance model (Bergomi 2005), for the term structure that one speed cannot fit (step 5).
+- XX along Heston paths, priced from the tables (step 6).
 
 ## References
 

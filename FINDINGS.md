@@ -488,3 +488,39 @@ construction.
 Also: at the paper's one-year Heston test, three methods here (COS, Gauss-Legendre and scipy's adaptive quadrature
 of the integral) agree with each other to 1e-14 and sit 1.6e-8 below the paper's printed reference value, which
 came from a Carr-Madan run on a fixed grid; at ten years they match the paper's reference to 3.5e-10.
+
+**F22. In the Heston model the marked option of XX does not drift, and the error of the simulation is far below a
+vol point.** The script `scripts/qe_bias_study.py` measured this on 2026-10-23. Its design was fixed before the run.
+It uses 16,777,216 synthetic paths for each case, the parameters of Gatheral (2006, Table 3.2), and the listed
+December 2029 10,000 call. The two pricers of `volmodel.pricers` give the exact price.
+
+The first table shows the bias of each scheme, the Monte Carlo price minus the exact price, in vol points. The
+standard error is 0.0037 vol points in each case.
+
+| Time step | Steps | QE-M | QE | Euler |
+|---|---|---|---|---|
+| 1 session | 795 | +0.0006 | +0.0006 | +0.0014 |
+| 5 sessions | 159 | -0.0096 | -0.0091 | -0.0017 |
+| 21 sessions | 38 | -0.0080 | +0.0005 | +0.0647 |
+| 63 sessions | 13 | -0.0265 | +0.0407 | +0.3455 |
+
+The second table shows the martingale identity. The price table marks the call along daily QE-M paths. The gap is
+the expected value of the mark divided by the price now, minus 1.
+
+| Checkpoint (years) | Gap | Standard error |
+|---|---|---|
+| 0.51 | -0.017% | 0.016% |
+| 1.50 | -0.034% | 0.032% |
+| 2.50 | -0.052% | 0.047% |
+
+What it means:
+- On daily steps the QE-M scheme has no measurable bias. Even on steps of 63 sessions, QE and QE-M stay within
+  0.05 vol points. The Euler scheme reaches 0.35 vol points on those steps.
+- So the simulation adds no error that matters next to the uncertainty of the vol itself (F20).
+- The marked option keeps its value in expectation. Each gap is within 1.1 standard errors, and each standard
+  error is at most 0.05% of the price. This meets the accuracy target of v0.3.1.
+- The slide rule gave a gap of -5.55% for the same option at mid-life (F19). So the drift of F17 comes from the
+  slide rule, and a model with a random variance removes it.
+
+Limits: here the model is right by construction, so the test says nothing yet about the real market. The three
+checkpoints use the same paths, so their errors are correlated.

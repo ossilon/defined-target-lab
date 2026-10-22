@@ -95,19 +95,26 @@ class Heston:
         return c1, c2
 
 
-def log_cf(model, u, T):
-    """log E[exp(i u X_T)] for real or complex u (array or scalar), in the continuous form described above."""
+def cf_parts(model, u, T):
+    """(C, D) with log E[exp(i u X_T)] = C + D v0. Neither part depends on v0, so one evaluation prices any number of
+    starting variances (pricetable.py uses this)."""
     if not T > 0:
         raise ValueError(f"maturity T must be positive (years), got {T}")
     u = np.asarray(u, dtype=complex)
-    k, th, eta, rho, v0 = model.kappa, model.theta, model.eta, model.rho, model.v0
+    k, th, eta, rho = model.kappa, model.theta, model.eta, model.rho
     beta = k - 1j * rho * eta * u
     d = np.sqrt(beta * beta + eta * eta * (u * u + 1j * u))      # principal square root: real part >= 0
     g = (beta - d) / (beta + d)
     e = np.exp(-d * T)
     D = (beta - d) / (eta * eta) * (1 - e) / (1 - g * e)
     C = k * th / (eta * eta) * ((beta - d) * T - 2 * np.log((1 - g * e) / (1 - g)))
-    return C + D * v0
+    return C, D
+
+
+def log_cf(model, u, T):
+    """log E[exp(i u X_T)] for real or complex u (array or scalar), in the continuous form described above."""
+    C, D = cf_parts(model, u, T)
+    return C + D * model.v0
 
 
 def cf(model, u, T):

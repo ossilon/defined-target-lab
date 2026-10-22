@@ -39,6 +39,7 @@ GENERIC = {
                                    r"|analys(?:e\b|ed|ing|er))\w*"),
 }
 ALLOWED_EMAILS = {"info@roundhillinvestments.com"}         # public issuer contact, cited in docs
+SPELLING_LISTS = {"scripts/scan_identifiers.py", "scripts/ste_check.py"}   # they list the British spellings to catch
 DATA_SUFFIXES = {".csv", ".json", ".jsonl", ".xls", ".xlsx", ".pdf", ".parquet"}
 ALLOWED_DATA_DIRS = ("definedtarget/funds/", "docs/")
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
@@ -242,8 +243,8 @@ def scan(files=None, personal=(), handle=None, url=None):
                 if rx.search(checked):
                     problems.append(f"{rel}:{n}: personal term /{rx.pattern}/")
             for name, rx in GENERIC.items():
-                if name == "British spelling" and rel == "scripts/scan_identifiers.py":
-                    continue                                   # this file lists the spellings it looks for
+                if name == "British spelling" and rel in SPELLING_LISTS:
+                    continue                                   # these files list the spellings they look for
                 for m in rx.finditer(line):
                     if name == "email address" and m.group(0).lower() in ALLOWED_EMAILS:
                         continue

@@ -1,7 +1,7 @@
 """definedtarget.volmodel: volatility models for long-dated index options (v0.3.1, in progress).
 
-Asset-agnostic: it imports only Python's standard library, numpy, numba, scipy and (for simulation, from step 3)
-the sibling package montecarlo, never the rest of definedtarget, so other projects can import it unchanged. Inputs
+Asset-agnostic: it imports only Python's standard library, numpy, numba, scipy and (for simulation) the sibling
+package montecarlo, never the rest of definedtarget, so other projects can import it unchanged. Inputs
 are forwards, strikes, maturities and discount factors; nothing here knows about XX or the S&P 500.
 
 Modules (step 2: the closed-form judges come first):
@@ -12,7 +12,11 @@ Modules (step 2: the closed-form judges come first):
 - black: Black-76 and its implied volatility (a copy of the project's pricing code, so this package stands alone;
   tests/test_vol_black.py keeps the two identical);
 - calibrate: a Levenberg-Marquardt fit of the Heston parameters to implied vols and variance-swap rates, with
-  standard errors and the correlation of the estimates (how well the data pins each parameter down).
+  standard errors and the correlation of the estimates (how well the data pins each parameter down);
+- stochvol (step 3): Heston paths by Andersen's (2008) QE scheme with the martingale correction, on montecarlo's
+  random streams; eta = 0 reproduces montecarlo.paths.lognormal bit for bit;
+- pricetable (step 3): Heston implied vols on a grid of log-moneyness and vol for one remaining maturity, and calls
+  priced from it, fast enough to mark options along simulated paths.
 The interface is provisional until v0.3.3: names and arguments may change. The mathematics, with sources, is in
 docs/MODELS.md.
 """

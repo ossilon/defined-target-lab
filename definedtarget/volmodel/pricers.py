@@ -90,21 +90,73 @@ def _valid_prefix(lnm):
     return n
 
 
+def _chernoff(up, dn, tail):
+    """Chernoff ends from ln E[e^{sX}] on S_GRID (up: s > 0; dn: the same at -s), over the valid prefix."""
+    lt = math.log(tail)
+    nu, nd = _valid_prefix(up), _valid_prefix(dn)
+    if nu == 0 or nd == 0:
+        raise ArithmeticError("no valid moment of X_T near 0: the model's moment generating function failed")
+    return float(np.max((lt - dn.real[:nd]) / S_GRID[:nd])), float(np.min((up.real[:nu] - lt) / S_GRID[:nu]))
+
+
+def cos_call_surface(model, k, v, T, tail=1e-15, tol=1e-14):
+    """Undiscounted calls per unit forward, c[i, j] = E[(S_T / F - e^{k_j})^+], for starting variances v[i] and
+    log-moneyness k[j] = ln(K / F), with model's theta, kappa, eta and rho (its v0 is not used). The same COS method
+    as cos_prices, for many starting variances at once: log E[e^{iuX}] = C + D v, and C and D do not depend on v.
+    The range is the union of the Chernoff ranges over the grid of v."""
+    k = np.atleast_1d(np.asarray(k, dtype=float))
+    v = np.atleast_1d(np.asarray(v, dtype=float))
+    if k.ndim != 1 or not np.all(np.isfinite(k)):
+        raise ValueError("log-moneyness k must be a 1-D array of finite numbers")
+    if v.ndim != 1 or not np.all(np.isfinite(v)) or np.any(v < 0):
+        raise ValueError("starting variances v must be a 1-D array of finite numbers, 0 or more")
+    if not (isinstance(T, (int, float, np.floating)) and math.isfinite(T) and T > 0):
+        raise ValueError(f"the maturity T (years) must be a finite positive number, got {T!r}")
+    cu, du = heston.cf_parts(model, -1j * S_GRID, T)
+    cd, dd = heston.cf_parts(model, 1j * S_GRID, T)
+    ends = [_chernoff(cu + du * vi, cd + dd * vi, tail) for vi in np.unique(v)]
+    A, B = min(e[0] for e in ends), max(e[1] for e in ends)
+    w = B - A
+    K = np.exp(k)
+    a = A - k                                   # y = ln(S_T / K) = X_T - k
+    d = np.clip(0.0, a, a + w)
+    total = np.zeros((v.size, k.size))
+    done, nxt, converged = 0, N_START, False
+    while done < N_MAX:
+        block = np.zeros_like(total)
+        for lo in range(done, nxt, CHUNK):
+            kk = np.arange(lo, min(nxt, lo + CHUNK))
+            om = kk * math.pi / w
+            C, D = heston.cf_parts(model, om, T)
+            phi = np.exp(C[None, :] + D[None, :] * v[:, None])            # (nv, n)
+            term = (phi * np.exp(-1j * om * A)[None, :]).real
+            if lo == 0:
+                term[:, 0] *= 0.5
+            block += term @ _put_coefficients(om, a, d, w)
+        total += block
+        tail_phi = float(np.max(np.abs(phi)))
+        done, nxt = nxt, 2 * nxt
+        if np.max(np.abs(block) * K[None, :]) <= tol and tail_phi <= tol:
+            converged = True
+            break
+    if not converged:
+        raise ArithmeticError(f"the COS series did not converge within {N_MAX} terms")
+    puts = K[None, :] * total
+    beyond = a + w <= 0.0
+    calls = puts + (1.0 - K)[None, :]
+    calls[:, beyond] = 0.0
+    return calls
+
+
 def chernoff_range(model, T, tail=1e-15):
     """[A, B] with P(X_T < A) <= tail and P(X_T > B) <= tail, from Chernoff's bound P(X > B) <= E[e^{sX}] e^{-sB}
     (s > 0, and the mirror image for the left tail), minimized over s up to the moment explosion. A distribution
     free bound: it needs no shape assumption, so it is safe for Heston's exponential tails, where a range of L
     standard deviations is too narrow (tests/test_vol_pricers.py, first run 2026-10-21: at L = 12 the COS price of
     Andersen's Case I at XX's strike was 0.38 too low)."""
-    lt = math.log(tail)
     up = heston.log_cf(model, -1j * S_GRID, T)          # ln E[e^{sX}] for s > 0
     dn = heston.log_cf(model, 1j * S_GRID, T)           # ln E[e^{-sX}]
-    nu, nd = _valid_prefix(up), _valid_prefix(dn)
-    if nu == 0 or nd == 0:
-        raise ArithmeticError("no valid moment of X_T near 0: the model's moment generating function failed")
-    B = float(np.min((up.real[:nu] - lt) / S_GRID[:nu]))
-    A = float(np.max((lt - dn.real[:nd]) / S_GRID[:nd]))
-    return A, B
+    return _chernoff(up, dn, tail)
 
 
 def cos_prices(model, F, K, T, df=1.0, kind="call", tail=1e-15, tol=1e-14, return_info=False, L=None, N=None):

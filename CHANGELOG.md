@@ -27,6 +27,20 @@
 - FINDINGS F21: two corrections to the COS method's standard reference for long-dated Heston options.
 - `docs/MODELS.md`: the mathematics and sources, starting with the volatility model.
 
+### Added: Heston paths and price tables (step 3)
+- `volmodel.stochvol` simulates the index and its variance with the QE scheme of Andersen (2008). The martingale
+  correction is on by default. The full-truncation Euler scheme is there for comparison only.
+- The simulation uses the random streams of the Monte Carlo engine. With eta = 0 and v0 = theta it gives the same
+  numbers as `montecarlo.paths.lognormal`, bit for bit.
+- `volmodel.pricetable` holds Heston implied vols on a grid and prices calls by Black-76 at the interpolated vol.
+  `pricers.cos_call_surface` prices the grid in one calculation.
+- Tests: `test_vol_stochvol` and `test_vol_pricetable`. The tests reproduce 13 published biases of Andersen. They
+  also check exact moments, prices at fine steps and the martingale identity of the marked option.
+- `scripts/qe_bias_study.py` and FINDINGS F22: the bias of each scheme at the strike of XX, and the martingale
+  identity at the accuracy target of v0.3.1.
+- `docs/MODELS.md` is now in Simplified Technical English (ASD-STE100). `scripts/ste_check.py` checks it.
+  `tests/test_docs_models.py` checks that each file and function that the document names exists.
+
 ## v0.3.0.1 (2026-10-18)
 
 Fixes from an independent external audit of v0.3.0. The audit ran the full test suite on Linux (Python 3.10 and 3.12)
