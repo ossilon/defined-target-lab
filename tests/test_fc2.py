@@ -1,14 +1,15 @@
-"""definedtarget.forward.fc2: the draft FC2 model M5 (the v0.3.1 two-factor model in the monthly forecast check).
+"""definedtarget.forward.fc2: the FC2 models M5 and M6 (the v0.3.1 two-factor model in the monthly forecast check).
 
 Synthetic inputs only. Judges (tolerances fixed 2026-10-23, before the first run; SE = Monte Carlo standard error):
 1. States: indices made by the model's own term structure at known (v1, v2) give those variances back (1e-10).
-2. The NAV at t: the table and the COS pricer agree (1e-6 relative).
+2. The NAV at t: the table and the COS pricer agree (2e-6 per unit forward; first run: 1e-6 relative, see below).
 3. The martingale identity of the forecast: E[NAV_T - cash] = e^{(r - fee) t_T} (NAV_t - cash) within 3 SE, and E[SPY
    growth] = e^{(r - q) t_T} within 3 SE, over one FC1 month.
 4. The record: 999 increasing XX and SPY levels; the same inputs give the same record, bit for bit; SPY's PIT reads
    the saved levels (0.5 at their median).
 5. The last origin (T = the expiry): XX's NAV at T is the payoff.
-6. FC2 is a draft: FREEZE_DATE and PARAMS are unset until the ledger holds it.
+6. The freeze: fc2.PARAMS equals the FC2 ledger entry's parameters and the numbers in its rule text; FREEZE_DATE is
+   the entry's date; M5 and M6 run from the first FC1 origin and not before the freeze.
 7. Inside FC1's record: adding M5 leaves M1-M4 the same, bit for bit; scoring reads M5's SPY PIT from its levels.
 8. FC2 never blocks FC1: missing FC2 inputs leave M1-M4 whole and mark M5 void; scoring skips it.
 """
@@ -86,9 +87,18 @@ pay = math.exp(-fc.FEE * float(times_l[kl])) * last.options_per_share * np.maxim
     + last.cash_per_share
 check("the last origin (T = the expiry): XX's NAV at T is the payoff", np.allclose(gl * n0, pay, rtol=1e-12, atol=0))
 
-# 6. A draft.
-check("FC2 is a draft: FREEZE_DATE and PARAMS are unset until the ledger holds it",
-      fc2.FREEZE_DATE is None and fc2.PARAMS is None)
+# 6. The freeze (FC2 frozen 2026-10-23; this judge replaced "FC2 is a draft" at the freeze).
+from definedtarget import ledger  # noqa: E402
+
+fc2_entry = [e for e in ledger.read() if e.get("id") == "FC2" and e["kind"] == "protocol"]
+check("the ledger holds FC2 once, and fc2.PARAMS equals its frozen parameters number for number",
+      len(fc2_entry) == 1 and fc2_entry[0]["parameters"] == fc2.PARAMS, fc2_entry[0]["parameters"] if fc2_entry else None)
+text = " ".join(fc2_entry[0]["rules"]) if fc2_entry else ""
+check("... every frozen number also stands in the rule text (rules 5 and 6)",
+      all(f"{k} = {v:.12g}" in text for p in fc2.PARAMS.values() for k, v in p.items()))
+check("... fc2.FREEZE_DATE is the entry's date, and the FC2 models run from the first FC1 origin (2026-10-30) on",
+      fc2.FREEZE_DATE.isoformat() == fc2_entry[0]["recorded_utc"][:10] and set(fc2.active(INP.origin)) == {"M5", "M6"}
+      and fc2.active(date(2026, 10, 22)) == {})
 
 # 7. Inside FC1's record (added 2026-10-23 with the forecast hook, before its first run).
 plain = fc.make_forecast(INP, T, 1 << 14)

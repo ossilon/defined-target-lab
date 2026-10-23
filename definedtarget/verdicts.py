@@ -947,6 +947,8 @@ def counted_listed(root, cutoff, ledger_path=None):
     entries = ledger.read(ledger_path) if ledger_path else ledger.read()
     p3_from = min((e["recorded_utc"] for e in entries if e.get("id") == "P3" and e.get("kind") == "protocol"),
                   default=None)
+    if p3_from is not None and len(p3_from) == 10:    # a date-only entry (ledger.append): the end of that UTC day
+        p3_from += "T23:59:59Z"
     raw = root / "raw" / "tradingview_chain"
     chosen = {}
     for path in sorted(raw.glob("*/*.json")) if raw.exists() else []:

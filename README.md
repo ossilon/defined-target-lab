@@ -108,7 +108,7 @@ The code here computes each fact from the issuer's public daily files and public
 | **Verdicts**: computes each prediction's verdict from its frozen rule (provisional numbers before its review date); records a verdict only when asked | `py -I scripts/verdicts.py` |
 | **Monte Carlo engine** (v0.3): seeded paths on the real trading calendar (lognormal or blocks of real S&P 500 history), on the CPU or an optional GPU, with error bars, exact-answer tests, no look-ahead and a run manifest for every study. It imports nothing XX-specific. Its interface stays provisional until v0.3.3: names and arguments may change. | `definedtarget.montecarlo` ([how it works and how to use it](docs/learn/06-the-monte-carlo-engine.md)) |
 | **XX path studies** (v0.3): what a holder lives through path by path (drawdowns, time below the price paid, the odds of reaching 2x / 5x / 10x), the volatility rule on real paths since 2007, and history's shape against the bell curve | `py -I scripts/xx_paths_study.py`, `slide_rule_test.py`, `effective_leverage_study.py`, `bootstrap_study.py` (FINDINGS F15-F19) |
-| **Monthly forecast check** (v0.3, protocol FC1): the engine forecasts XX one month ahead under four models; a month later the log records where the real outcome landed | `py -I scripts/forecast_check.py due`, then `forecast`; a month later `outcome --no-events` after reviewing the issuer's notices (or `--void "..."`); `report` when `due` lists one |
+| **Monthly forecast check** (v0.3, protocol FC1; two more models from protocol FC2): the engine forecasts XX one month ahead under four models (six from 2026-10-30); a month later the log records where the real outcome landed | `py -I scripts/forecast_check.py due`, then `forecast`; a month later `outcome --no-events` after reviewing the issuer's notices (or `--void "..."`); `report` when `due` lists one |
 | **Plain-English explainers** | [docs/learn/](docs/learn/01-what-is-a-call.md) |
 
 
@@ -153,7 +153,10 @@ covers the first 22 lines (SHA-256 `a213dfabc265a43a3a88e8b5e96529dc402df60675fb
 steps with `[:22]` and the name `predictions_2026-10-15.jsonl`. That proof was stamped later the same day, so it
 shows that P2 existed by then, not that it came before the capture. Protocol FC1 (the monthly forecast check)
 follows as line 23, appended on 2026-10-17 (UTC), before its first origin close, 2026-10-30; the repository's
-public history dates it. Verdicts append below and never change earlier lines. The test
+public history dates it. Hypotheses H20 and H21 follow as lines 24 and 25 (2026-10-21). Protocol FC2 follows as
+line 26 (2026-10-23, UTC). It adds two models, M5 and M6, to the monthly forecast check, also before the first
+origin close. From FC2 on, the ledger records the UTC date of an entry, not its time. Verdicts append below and never
+change earlier lines. The test
 `tests/test_ledger.py` pins both sets of bytes, and `.gitattributes` stops git from changing their line endings.
 
 ## How the model works (short version)

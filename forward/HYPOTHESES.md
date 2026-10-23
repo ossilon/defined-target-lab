@@ -1,7 +1,7 @@
 # Pre-registered predictions (forward test)
 
 Generated from `forward/predictions.jsonl` by `definedtarget.ledger.render()`; do not edit by hand.
-Chain check: **chain intact** (25 entries). README.md, "Check the freeze", shows how to verify that the entries existed before the data that tests them.
+Chain check: **chain intact** (26 entries). README.md, "Check the freeze", shows how to verify that the entries existed before the data that tests them.
 
 ## Protocol P1 (frozen 2026-10-14)
 
@@ -49,6 +49,24 @@ Chain check: **chain intact** (25 entries). README.md, "Check the freeze", shows
 - Rule 9. What gets reported (no verdict): after every 12 outcome entries and at the end, per model and for both PITs: the count, the share inside the middle 50% band (0.25-0.75) and the middle 90% band (0.05-0.95), each with a 95% Wilson interval, the mean PIT, and a 10-bin histogram. Public files hold PITs and these summaries only, never NAVs, returns or the saved forecasts.
 - Rule 10. A later protocol may add models (for example bootstrap-driven paths or the v0.3.1 vol model) or analyses of the saved forecasts (scores, baselines, regime splits) from its own freeze date onward; it never changes M1-M4, this protocol's reports or a recorded entry.
 - Known biases, stated before any data: the risk-neutral drift pushes PITs slightly toward 1 (a 4% a year premium moves XX's one-month median by about 2% against a one-month sd of about 28%); M4 is expected to be a little too wide (VIX usually exceeds the volatility that follows); M1-M3 use a 3-year vol for a one-month move, so they should be too wide in calm months and too narrow in stressed ones.
+
+## Protocol FC2 (frozen 2026-10-23)
+
+- Rule 1. Scope. FC2 adds two models, M5 and M6, to the monthly forecast check under FC1 rule 10. They run for every FC1 origin from 2026-10-30 onward. FC2 never changes M1-M4, the FC1 rules, the FC1 reports or a recorded entry. FC1 rules 1, 2, 5, 7 and 8 apply to M5 and M6 without change, and one run saves M1-M6 in one record.
+- Rule 2. FC2 never stops FC1. If the inputs of M5 or M6 are missing, or a model fails, the record keeps M1-M4. It marks each FC2 model that failed as void, with the reason. That month is then void for that model.
+- Rule 3. Inputs. All inputs come from close t: the inputs of FC1 rule 3, and the Cboe closes of VIX, VIX3M, VIX6M and VIX1Y for t. Each close comes from the newest Cboe file that holds t and that the project saved by the deadline of the entry.
+- Rule 4. The model. M5 and M6 use the two-factor Heston model of definedtarget.volmodel (FINDINGS F24; docs/MODELS.md, section 1.11), with one eta and one rho for both factors. The function termstructure.states_two gives the two factor variances v1 and v2 of close t from its four index closes. It uses tenors of 30, 93, 184 and 366 days over 365, and an index noise of 0.5 vol points.
+- Rule 5. The parameters of M5, fixed here. M5 uses the parameters that passed the holdout test of F24. That fit used index days from 2009-09-18 to 2019-12-31 and trades from 2024-06-14 to 2025-06-30. M5: kappa1 = 5.09994244246, theta1 = 0.0262268545928, kappa2 = 1e-06, c2 = 0.0173301546638, theta2 = 19477.9086347, eta = 1.31369997526, rho = -0.780185481629.
+- Rule 6. The parameters of M6, fixed here. M6 uses the same fit on all data before this freeze. That fit used index days from 2009-09-18 to 2026-10-16 and trades from 2024-06-14 to 2026-10-20. M6: kappa1 = 5.07978559489, theta1 = 0.0303613259579, kappa2 = 1e-06, c2 = 0.0125599861037, theta2 = 73763.8148299, eta = 2.47779211628, rho = -0.831301163622. No test has judged the fit of M6 on data that it did not see.
+- Rule 7. The paths. SPY and both variances move together from t to T under the pricing measure, on the real NYSE calendar. Their drift is the FC1 rate minus the dividend yield. The function volmodel.stochvol.simulate_two makes the paths by the QE scheme with the martingale correction, with the seed and the number of paths of FC1. Stream 0 drives SPY, so SPY has the draws of M1, and streams 1 and 2 drive the two factors.
+- Rule 8. The value of XX. The model NAV of XX is its options per share times the model price of one option, plus cash, with the FC1 fee. The COS pricer gives that price at t, and a two-factor price table at the remaining maturity gives it at T (the defaults of pricetable.build_two). At the last origin, T is the expiry, and the option pays its intrinsic value. The growth is the model NAV at T divided by the model NAV at t.
+- Rule 9. The saved forecast. For each of M5 and M6, the record keeps the growth of XX and the growth of SPY (S_T / S_t) at the 999 FC1 levels. It also keeps the variances of close t, the four index closes and the parameters.
+- Rule 10. Scoring. The PIT of XX follows FC1 rule 6. The PIT of SPY is the share of the saved SPY growth below the SPY growth that occurs, by the interpolation of FC1 rule 6. SPY is not lognormal under M5 and M6, so FC2 does not use the closed form of FC1.
+- Rule 11. Reports. After every 12 outcome entries and at the end, FC2 appends a report entry. It gives the statistics of FC1 rule 9 for M5 and M6 next to M1-M4. The FC1 reports stay M1-M4. Neither M5 nor M6 replaces the other because of the results: the reports show both to the end.
+- Known bias 1, stated before any data: the risk-neutral drift, as in FC1.
+- Known bias 2, stated before any data: the model ran low in the holdout test of F24. Its 3-year vol at the strike of XX was 0.96 points too low. The growth ratio removes the error in the level of the NAV. It does not remove the error in its sensitivity.
+- Known bias 3, stated before any data: the smile needs an eta of 1.31 (M5) and 2.48 (M6), against 0.73 from the indices. If the indices are right, the months of M5 and M6 are too wide, and those of M6 more so.
+- Known bias 4, stated before any data: the parameters are not stable. The fit on more data almost doubles eta and almost quadruples the slow pricing drift (0.0195 to 0.0738). Neither set is the truth.
 
 ## Hypotheses
 

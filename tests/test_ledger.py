@@ -17,6 +17,8 @@ with tempfile.TemporaryDirectory() as tmp:
           and "- rule two" in ledger.render(q))
     raises("a protocol with rules as plain text (not a list) is refused",
            lambda: ledger.append({"kind": "protocol", "id": "P2", "rules": "one long string"}, q), "list of sentences")
+    check("a new entry records the UTC date only, never the clock time (rule from 2026-10-24)",
+          pr["recorded_utc"] == "2026-10-14" and "09:00" not in q.read_text(encoding="utf-8"), pr["recorded_utc"])
 
 with tempfile.TemporaryDirectory() as tmp:
     p = Path(tmp) / "predictions.jsonl"

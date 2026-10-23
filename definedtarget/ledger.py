@@ -75,7 +75,10 @@ def append(entry, path=DEFAULT_PATH, now=None):
     if kind == "verdict" and not any(e["id"] == entry["id"] and e["kind"] == "hypothesis" for e in existing):
         raise ValueError(f"no frozen hypothesis {entry['id']} to give a verdict on")
     body = dict(entry)
-    body["recorded_utc"] = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # The UTC date only, never the clock time (project rule: public files carry no times of the author's activity;
+    # entries frozen before 2026-10-24 keep the times they were frozen with). Code that needs an instant reads a bare
+    # date as the end of that UTC day, so nothing taken before a freeze ever counts under it (verdicts.counted_listed).
+    body["recorded_utc"] = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%d")
     prev = existing[-1]["row_hash"] if existing else GENESIS
     full = {**body, "prev_hash": prev, "row_hash": _hash(prev, body)}
     path = Path(path)

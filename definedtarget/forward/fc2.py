@@ -1,5 +1,7 @@
-"""Protocol FC2 (a DRAFT until frozen in the ledger): the v0.3.1 dynamics model as a fifth model, M5, of the monthly
-forecast check (FC1 rule 10 allows a later protocol to add models from its own freeze date onward).
+"""Protocol FC2 (frozen in the ledger on 2026-10-23): the v0.3.1 dynamics model as models M5 and M6 of the monthly
+forecast check (FC1 rule 10 allows a later protocol to add models from its own freeze date onward). M5 has the
+parameters that passed the holdout (F24); M6 has the same fit on all data before the freeze. Neither replaces the other
+because of the results (FC2 rule 11). The text below says M5 for both.
 
 Plain words
 - M5 is the two-factor Heston model of v0.3.1 (FINDINGS F24; docs/MODELS.md section 1.11), with the parameters fixed
@@ -13,6 +15,7 @@ Plain words
 - Seeds and paths are FC1's (seed = year x 100 + month, one million paths, stream 0): M5's index draws are M1's.
 """
 import math
+from datetime import date
 
 import numpy as np
 
@@ -23,8 +26,15 @@ from . import forecast as fc
 INDICES = ("VIX", "VIX3M", "VIX6M", "VIX1Y")
 TENORS = np.array([30, 93, 184, 366]) / 365.0        # Cboe's tenors (calendar days), as in the v0.3.1 studies
 SD_INDEX = 0.005                                     # the step 4 and 5 fits' index noise (vol units)
-FREEZE_DATE = None                                   # set at the freeze: the FC2 models run for origins on or after it
-PARAMS = None                                        # set at the freeze: {model name: params_from(...)}
+FREEZE_DATE = date(2026, 10, 23)                     # the FC2 ledger entry's date: its models run from this origin on
+# The frozen parameters, as the FC2 ledger entry holds them (rules 5 and 6; tests/test_fc2.py checks they match).
+# M5: step 5's B2 as judged under the holdout (F24); M6: the same fit on all data before the freeze.
+PARAMS = {
+    "M5": {"kappa1": 5.09994244246, "theta1": 0.0262268545928, "kappa2": 1e-06, "c2": 0.0173301546638,
+           "theta2": 19477.9086347, "eta": 1.31369997526, "rho": -0.780185481629},
+    "M6": {"kappa1": 5.07978559489, "theta1": 0.0303613259579, "kappa2": 1e-06, "c2": 0.0125599861037,
+           "theta2": 73763.8148299, "eta": 2.47779211628, "rho": -0.831301163622},
+}
 
 
 def active(origin):

@@ -115,6 +115,11 @@ its first month). A month later the log records where the real outcome landed in
 forecasts spread those percentiles evenly between 0 and 1. It is the only test of the engine on XX itself with data
 the engine has not seen. The log (`forward/forecast_log.jsonl`) holds percentiles and fingerprints only.
 
+From the first month (2026-10-30), protocol FC2 adds two more models, M5 and M6. They use the two-factor volatility
+model of v0.3.1, in which the index and its variance move together. M5 has the parameters that passed the holdout
+test (FINDINGS F24). M6 has the same fit on all data before the freeze. The two sets are far apart, and the check
+shows which one forecasts XX better. Neither replaces the other because of the results.
+
 ## What it cannot do
 
 - Paths follow the model you choose. A lognormal path has no crashes beyond the bell curve; a bootstrap cannot

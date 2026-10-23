@@ -2,6 +2,13 @@
 
 ## v0.3.1 (in progress): the volatility release
 
+### Frozen (2026-10-23): protocol FC2
+- FC2 adds two models, M5 and M6, to the monthly forecast check from its first origin (2026-10-30). Both use the
+  two-factor model. M5 has the parameters that passed the holdout test (F24). M6 has the same fit on all data
+  before the freeze. Neither replaces the other because of the results. The ledger holds the parameters.
+- From FC2 on, a new ledger entry records its UTC date, not its time. Code that needs an instant reads the date as
+  the end of that UTC day.
+
 ### Frozen (2026-10-21)
 - H20: the 3-year skew-stickiness ratio of the listed S&P 500 options lies between 0.5 and 1.5 (sticky strike).
 - H21: between one and three years, the ATM skew decays with an exponent between 0.4 and 1.1.

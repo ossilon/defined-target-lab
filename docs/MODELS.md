@@ -366,8 +366,8 @@ Two choices come from measurements:
 The tests mark the option along two-factor paths with these tables. Its mean at 0.5 and 2.0 years equals the price
 now within 3 standard errors (the martingale identity).
 
-The module `definedtarget/forward/fc2.py` uses the tables for the draft forecast model M5 (protocol FC2). It is not
-active until the ledger holds FC2.
+The module `definedtarget/forward/fc2.py` uses the tables for the forecast models M5 and M6 of protocol FC2. The
+ledger froze FC2 on 2026-10-23. M5 and M6 run from the first origin of the monthly forecast check, 2026-10-30.
 
 ### 1.13 Parts not built yet
 
