@@ -30,6 +30,10 @@ discount factor to the payment date. Prices are per unit of the underlying, like
 tests/test_vol_pricers.py holds the judges: published reference values, the two pricers against each other over a
 grid that includes XX's strike, a third quadrature (scipy), no-arbitrage shape, the lognormal limit, the range and
 term checks, and Lee's (2004) wing bound.
+
+Every pricer here also takes a heston.DoubleHeston (the two-factor model): its characteristic function is the product
+of its factors' functions, so COS uses it as is, and the Lewis-Lipton exponent is the sum of the factors' exponents.
+cos_call_surface (for price tables) takes one-factor models only. tests/test_vol_twofactor.py holds those judges.
 """
 import math
 
@@ -212,7 +216,10 @@ def cos_prices(model, F, K, T, df=1.0, kind="call", tail=1e-15, tol=1e-14, retur
 
 
 def lewis_exponent(model, k, T):
-    """h1(k) - (k^2 + 1/4) h2(k) v0 for real k (array): Andersen (2008), Proposition 3."""
+    """h1(k) - (k^2 + 1/4) h2(k) v0 for real k (array): Andersen (2008), Proposition 3. It is log phi at k - i/2, so
+    for a two-factor model it is the sum of the two factors' exponents."""
+    if isinstance(model, heston.DoubleHeston):
+        return lewis_exponent(model.f1, k, T) + lewis_exponent(model.f2, k, T)
     kap, th, eps, rho, v0 = model.kappa, model.theta, model.eta, model.rho, model.v0
     kh = kap - rho * eps / 2.0
     k = np.asarray(k, dtype=float)

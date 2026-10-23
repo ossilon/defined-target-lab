@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import black, pricers
-from .heston import Heston
+from .heston import DoubleHeston, Heston
 
 PARAMS = ("v0", "theta", "kappa", "eta", "rho")
 
@@ -198,7 +198,7 @@ def fit_heston(quotes, start, fixed=(), max_iter=200):
     z, info = levenberg_marquardt(fun, to_free(start, free), max_iter=max_iter)
     model = from_free(z, start, free)
     r = fun(z)
-    se, corr = _errors(_jacobian(fun, z, r), free, model)
+    se, corr = _errors(_jacobian(fun, z, r), free, _values(model))
     resid_vol = r * quotes.sd
     return Fit(model=model, rmse=float(math.sqrt(np.mean(resid_vol ** 2))), cost=float(r @ r), se=se, corr=corr,
                free=free, iterations=info["iterations"], converged=info["converged"], message=info["message"],
@@ -243,17 +243,90 @@ def fit_heston_days(days, start, fixed=("v0", "kappa"), sd=0.01, max_iter=200):
     z, info = levenberg_marquardt(fun, to_free(start, free), max_iter=max_iter)
     model = from_free(z, start, free)
     r = fun(z)
-    se, corr = _errors(_jacobian(fun, z, r), free, model)
+    se, corr = _errors(_jacobian(fun, z, r), free, _values(model))
     return Fit(model=model, rmse=float(math.sqrt(np.mean((r * sd) ** 2))), cost=float(r @ r), se=se, corr=corr,
                free=free, iterations=info["iterations"], converged=info["converged"], message=info["message"],
                residuals=r * sd)
 
 
-def _errors(J, free, model):
-    """Standard errors on the natural scale and the correlation matrix of the estimates, from the Jacobian J of the
-    weighted residuals on the free scale (see the module docstring)."""
-    se = {p: float("nan") for p in PARAMS}
-    corr = np.full((len(PARAMS), len(PARAMS)), np.nan)
+TWO_PARAMS = ("theta1", "theta2", "eta", "rho")
+
+
+@dataclass(frozen=True)
+class Day2:
+    """One day of option quotes for the two-factor model: the day's factor variances v1, v2 (from its vol indices),
+    forward F, maturity T (years), strikes K and their implied vols iv."""
+    v1: float
+    v2: float
+    F: float
+    T: float
+    K: np.ndarray
+    iv: np.ndarray
+
+
+def double_model(values, kappa1, kappa2, v1, v2):
+    """The two-factor model with one eta and one rho for both factors: values holds theta1, theta2, eta, rho."""
+    return DoubleHeston(Heston(v1, values["theta1"], kappa1, values["eta"], values["rho"]),
+                        Heston(v2, values["theta2"], kappa2, values["eta"], values["rho"]))
+
+
+def fit_double_days(days, start, free=("theta2", "eta", "rho"), sd=0.01, max_iter=200):
+    """Fit the two-factor model with one eta and one rho shared by both factors (calibrate.TWO_PARAMS) to option
+    quotes on many days (Day2), each day priced at its own v1 and v2. start: a DoubleHeston whose factors share eta
+    and rho; it gives kappa1 and kappa2 (always held fixed) and the values of the parameters not in `free`.
+    Residuals are (model vol - quoted vol) / sd. The result's model carries start's v1, v2 and the fitted
+    parameters; se and corr are in TWO_PARAMS order."""
+    if start.f1.eta != start.f2.eta or start.f1.rho != start.f2.rho:
+        raise ValueError("start's two factors must share eta and rho")
+    unknown = set(free) - set(TWO_PARAMS)
+    if unknown or not free:
+        raise ValueError(f"free must name some of {TWO_PARAMS}, got {free!r}")
+    free = tuple(p for p in TWO_PARAMS if p in free)
+    if not days:
+        raise ValueError("no days of quotes")
+    base = {"theta1": start.f1.theta, "theta2": start.f2.theta, "eta": start.f1.eta, "rho": start.f1.rho}
+    k1, k2 = start.f1.kappa, start.f2.kappa
+    iv_all = np.concatenate([np.asarray(d.iv, dtype=float) for d in days])
+
+    def values(z):
+        out = dict(base)
+        for p, v in zip(free, z):
+            out[p] = math.tanh(v) if p == "rho" else math.exp(v)
+        return out
+
+    def fun(z):
+        try:
+            with np.errstate(all="ignore"):
+                vals = values(z)
+                model_iv = np.concatenate([
+                    black.implied_vols(pricers.cos_prices(double_model(vals, k1, k2, d.v1, d.v2), d.F, d.K, d.T),
+                                       d.F, d.K, d.T)
+                    for d in days])
+        except (ValueError, ArithmeticError, OverflowError):
+            return np.full(iv_all.size, np.inf)
+        r = (model_iv - iv_all) / sd
+        return np.where(np.isfinite(r), r, np.inf)
+
+    z0 = np.array([math.atanh(base[p]) if p == "rho" else math.log(base[p]) for p in free])
+    z, info = levenberg_marquardt(fun, z0, max_iter=max_iter)
+    vals = values(z)
+    r = fun(z)
+    se, corr = _errors(_jacobian(fun, z, r), free, vals, TWO_PARAMS)
+    return Fit(model=double_model(vals, k1, k2, start.f1.v0, start.f2.v0), rmse=float(math.sqrt(np.mean((r * sd) ** 2))),
+               cost=float(r @ r), se=se, corr=corr, free=free, iterations=info["iterations"],
+               converged=info["converged"], message=info["message"], residuals=r * sd)
+
+
+def _values(model):
+    return {p: getattr(model, p) for p in PARAMS}
+
+
+def _errors(J, free, values, params=PARAMS):
+    """Standard errors on the natural scale and the correlation matrix of the estimates (in `params` order), from
+    the Jacobian J of the weighted residuals on the free scale (see the module docstring). values: the estimates by
+    name (rho moves on the atanh scale, every other parameter on the log scale)."""
+    se = {p: float("nan") for p in params}
+    corr = np.full((len(params), len(params)), np.nan)
     norms = np.linalg.norm(J, axis=0)
     ident = norms > 1e-10 * max(float(np.max(norms)), 1e-300)
     for p, ok in zip(free, ident):
@@ -265,14 +338,14 @@ def _errors(J, free, model):
         except np.linalg.LinAlgError:
             cov_z = np.full((Ji.shape[1], Ji.shape[1]), np.inf)
         names = [p for p, ok in zip(free, ident) if ok]
-        grad = np.array([1.0 - model.rho ** 2 if p == "rho" else getattr(model, p) for p in names])
+        grad = np.array([1.0 - values["rho"] ** 2 if p == "rho" else values[p] for p in names])
         cov = cov_z * np.outer(grad, grad)
         var = np.diag(cov)
         # a near-singular J^T J can invert to negative or NaN variances: those directions are not identified
         sd = np.where(np.isfinite(var) & (var > 0), np.sqrt(np.where(var > 0, var, 1.0)), np.inf)
         for p, s in zip(names, sd):
             se[p] = float(s)
-        pos = [PARAMS.index(p) for p in names]
+        pos = [params.index(p) for p in names]
         with np.errstate(invalid="ignore", divide="ignore"):
             corr[np.ix_(pos, pos)] = cov / np.outer(sd, sd)
     return se, corr

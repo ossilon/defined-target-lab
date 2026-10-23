@@ -100,6 +100,48 @@ class Heston:
         return c1, c2
 
 
+@dataclass(frozen=True)
+class DoubleHeston:
+    """The two-factor Heston model (Christoffersen, Heston and Jacobs 2009): two independent variance factors, each a
+    Heston factor with its own speed, long-run level, vol of variance and correlation with the index:
+        dS/S = sqrt(v1) dW1 + sqrt(v2) dW2,   dv_i = kappa_i (theta_i - v_i) dt + eta_i sqrt(v_i) dZ_i,
+        dW_i dZ_i = rho_i dt, and every other pair of shocks independent.
+    The variance now is v1 + v2. The log price X_T = ln(S_T / F_T) is the sum of two independent parts, and each
+    part is a one-factor Heston log price with that factor's parameters. So log phi = log phi_1 + log phi_2, and the
+    mean and variance of X_T add (derived here from the independence; tests/test_vol_twofactor.py checks it, also
+    through the exact reduction: with equal kappa, eta and rho the model is one-factor Heston with v0 = v1 + v2 and
+    theta = theta1 + theta2, because the sum of the two square-root processes is then one square-root process)."""
+    f1: Heston
+    f2: Heston
+
+    def __post_init__(self):
+        for name in ("f1", "f2"):
+            if not isinstance(getattr(self, name), Heston):
+                raise ValueError(f"DoubleHeston {name} must be a Heston factor, got {getattr(self, name)!r}")
+
+    @property
+    def v0(self):
+        return self.f1.v0 + self.f2.v0
+
+    @property
+    def theta(self):
+        """The long-run total variance theta1 + theta2."""
+        return self.f1.theta + self.f2.theta
+
+    def mean_variance(self, t):
+        return self.f1.mean_variance(t) + self.f2.mean_variance(t)
+
+    def expected_variance(self, T):
+        return self.f1.expected_variance(T) + self.f2.expected_variance(T)
+
+    def variance_swap_rate(self, T):
+        return self.expected_variance(T) / T
+
+    def cumulants(self, T):
+        (a1, b1), (a2, b2) = self.f1.cumulants(T), self.f2.cumulants(T)
+        return a1 + a2, b1 + b2
+
+
 def _variance_numeric(model, T, scale=1e-3):
     """Var(X_T) = -d^2/du^2 log phi at 0: central differences, Richardson-extrapolated over h and 2h, with the step
     h = scale / sqrt(E[W_T]) in units of the distribution's width (tests/test_vol_heston.py: within 1e-8)."""
@@ -114,7 +156,9 @@ def _variance_numeric(model, T, scale=1e-3):
 
 def cf_parts(model, u, T):
     """(C, D) with log E[exp(i u X_T)] = C + D v0. Neither part depends on v0, so one evaluation prices any number of
-    starting variances (pricetable.py uses this)."""
+    starting variances (pricetable.py uses this). One-factor models only."""
+    if not isinstance(model, Heston):
+        raise TypeError("cf_parts takes a one-factor Heston model (a DoubleHeston has one D per factor)")
     if not T > 0:
         raise ValueError(f"maturity T must be positive (years), got {T}")
     u = np.asarray(u, dtype=complex)
@@ -129,7 +173,10 @@ def cf_parts(model, u, T):
 
 
 def log_cf(model, u, T):
-    """log E[exp(i u X_T)] for real or complex u (array or scalar), in the continuous form described above."""
+    """log E[exp(i u X_T)] for real or complex u (array or scalar), in the continuous form described above. For a
+    DoubleHeston, the sum over its two factors."""
+    if isinstance(model, DoubleHeston):
+        return log_cf(model.f1, u, T) + log_cf(model.f2, u, T)
     C, D = cf_parts(model, u, T)
     return C + D * model.v0
 
