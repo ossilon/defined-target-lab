@@ -28,8 +28,8 @@ Plain words
 
 Random numbers: draw k of a path on stream s drives the index at step k, exactly as in montecarlo.paths (so the
 lognormal limit reuses the same numbers); the variance uses stream s + 1 (two factors: s + 1 and s + 2). Every draw
-has an address (seed, path, draw, stream), so the paths do not depend on threads or chunks. Imports: numpy, numba and
-montecarlo only.
+has an address (seed, path, draw, stream), so the paths do not depend on threads or chunks. Imports: numpy, numba,
+montecarlo and (for the model type) volmodel.heston only.
 """
 import math
 
@@ -38,6 +38,7 @@ import numpy as np
 
 from ..montecarlo.paths import NO_BARRIER
 from ..montecarlo.rng import _address, _check, inv_norm, philox4x32, u52
+from .heston import DoubleHeston
 
 SCHEMES = ("qe-m", "qe", "euler")
 SCHEMES_TWO = ("qe-m", "qe")
@@ -383,5 +384,7 @@ def simulate_two(seed, npaths, times, f1, f2, mu=0.0, scheme="qe-m", barrier=Non
 
 def simulate_two_model(model, seed, npaths, times, **kwargs):
     """simulate_two() with the factors of a heston.DoubleHeston model."""
+    if not isinstance(model, DoubleHeston):
+        raise ValueError(f"simulate_two_model takes a heston.DoubleHeston, got {type(model).__name__}")
     f = [(m.v0, m.theta, m.kappa, m.eta, m.rho) for m in (model.f1, model.f2)]
     return simulate_two(seed, npaths, times, f[0], f[1], **kwargs)

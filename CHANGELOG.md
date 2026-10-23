@@ -50,6 +50,22 @@
 - After a code review, the study prints the end date of each index file. It also counts the converged bootstrap
   refits and the weekly pairs that span a gap. Trade dates now refuse a bar stamp outside the evening.
 
+### Added: the two-factor model (step 5)
+- `heston.DoubleHeston`: two independent Heston variance factors. Both pricers take it: its characteristic function
+  is the product of the factors' functions.
+- `termstructure.fit_two` fits the two-factor term structure with both daily variances at 0 or above. The slow
+  factor carries its drift, so the fit stays finite when the slow speed goes to its floor.
+  `termstructure.vol_of_variance` measures each factor's eta from the time series of the indices.
+- `calibrate.fit_double_days` fits the smile on many days. `stochvol.simulate_two` simulates the two factors with
+  one QE step and one martingale correction each.
+- `stochvol` now uses one QE step function for one and two factors. The one-factor outputs stay the same, bit for bit.
+- `tests/test_vol_twofactor.py` holds the judges.
+- `scripts/vol_twofactor_study.py` holds the protocol. Its commit came before any test-window number. FINDINGS F24
+  gives the result: the model passes the accuracy target, and its slow factor does not revert.
+- After a code review, a boundary fit's own parameters are a valid start, and `vol_of_variance` gives NaN for a
+  factor with nothing to measure. `simulate_two_model` refuses a model that is not a `DoubleHeston`. The study also
+  prints a check added after the run: the paired difference against the constant, with weekly-block errors.
+
 ### Fixed: a code review of steps 2 and 3 (2026-10-23)
 - The price table priced states outside its grid too low. It returned 0 above the strike range and capped the vol
   at 120%. The grid now covers k from -3 to 3 and vols up to 200%, and the COS pricer prices each state outside it.

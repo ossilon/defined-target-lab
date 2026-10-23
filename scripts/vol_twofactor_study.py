@@ -274,6 +274,14 @@ def main(argv):
     print(f"paired, B2 against one factor B: mean difference of squared errors {d.mean():+.3f} (SE {d_se:.3f}, days "
           f"treated as independent); B2 closer on "
           f"{int((np.abs(errs[primary]) < np.abs(errs['one factor B (step 4)'])).sum())} of {d.size} days")
+    # added after the first full run (2026-10-23; not in the protocol, does not change the verdict): is the margin
+    # over the constant larger than its noise? The same paired difference, with a standard error from ISO-week blocks
+    weeks = np.array([100 * r["date"].isocalendar()[0] + r["date"].isocalendar()[1] for r in test10])
+    for name in ("constant 16.6%", "one factor B (step 4)"):
+        dd = (100 * errs[primary]) ** 2 - (100 * errs[name]) ** 2
+        means = np.array([dd[weeks == wk_].mean() for wk_ in np.unique(weeks)])
+        print(f"post hoc, B2 against {name}: mean difference of squared errors {dd.mean():+.3f}; SE from "
+              f"{means.size} weekly blocks {means.std(ddof=1) / math.sqrt(means.size):.3f}")
 
     # Sensitivity of B2 to theta1 (does not change the verdict).
     print("Sensitivity of B2 to theta1 (stage 1 refitted with theta1 held, then B2; RMSE, mean error):")

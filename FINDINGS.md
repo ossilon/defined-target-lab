@@ -585,3 +585,75 @@ What it means:
 Limits: 54 test days of thin trading; the last trade is not at the close; 25 of the 54 weekly pairs span more than
 one week (on one-week pairs the dynamics give 0.25 and a slope of 0.79); the VIX family drops strikes at two zero
 bids; F12 saw these trades before the protocol.
+
+**F24. The two-factor Heston model passes the accuracy target under the fixed holdout. Its slow factor does not
+revert, and its smile needs about twice the vol of variance that the indices show.** The script
+`scripts/vol_twofactor_study.py` measured this on 2026-10-23. The protocol is in the script, and its commit came
+before any two-factor number from a test window.
+
+One thing changed from F23: the variance model. It now has two independent square-root factors, with one eta and
+one rho for both, and the variances of each day at 0 or above. The data, the windows, the trades, the benchmarks
+and the pass rule are those of F23.
+
+Stage 1 fits the VIX family from 2009-09-18 to 2019-12-31 (2,587 days). Three starts give the same fit:
+- The fast factor has a speed of 5.10 a year (a half-life of 50 days) and a long-run vol of 16.2%. The bootstrap
+  band (5-95%) of that vol is 15.4% to 16.8%.
+- The slow factor's speed goes to its floor in all 200 bootstrap refits, so the slow factor does not revert. Its
+  drift is 0.0173 a year in variance units (0.0144 to 0.0228). A slow speed of 0.1 costs 14% more fit.
+- The RMSE in the fit window is 0.64 vol points for VIX and 0.74 for VIX1Y. One factor gave 1.52 and 1.41.
+
+Out of sample (2020-01-01 to 2026-10-16), VIX and VIX3M alone predict the longer indices (RMSE, vol points):
+
+| Index | Two factors | One factor | Flat (= VIX3M) | VIX3M plus the mean spread |
+|---|---|---|---|---|
+| VIX6M | 1.15 | 2.43 | 2.11 | 1.52 |
+| VIX1Y | 1.81 | 3.24 | 3.79 | 3.27 |
+
+Stage 2 fits the smile to the same 157 trades as F23. The primary variant B2 takes the slow drift from the trades:
+0.0195 a year (SE 0.0086), eta 1.31, rho -0.78, in-sample RMSE 0.40 vol points (F23's model: 0.42).
+
+The accuracy target uses the 54 days of F23:
+
+| Prediction | RMSE (vol points) | Mean error (vol points) |
+|---|---|---|
+| Two factors B2 (primary) | 1.25 | -0.96 |
+| Two factors A2 (slow drift from the indices) | 1.24 | -0.94 |
+| Two factors C2 (eta from the indices; a diagnostic) | 1.01 | -0.56 |
+| One factor B (F23; reproduced) | 1.39 | -1.20 |
+| Constant 16.6% | 1.35 | +0.68 |
+| Sticky strike plus the change of VIX1Y | 1.82 | -1.01 |
+| 0.77 x VIX1Y | 2.10 | +1.59 |
+| Slide rule (1.0 point per 10% fall) | 3.62 | -3.12 |
+
+The verdict is PASS. B2 is inside the 1.5-point target and below each benchmark. It is closer than F23's model on
+52 of 54 days. A check added after the run (not in the protocol) uses standard errors from 36 weekly blocks. Against
+F23's model, the mean difference of squared errors is -0.38 (SE 0.05): a clear gain. Against the constant it is
+-0.25 (SE 0.57): the pass over the constant is within the noise of 54 days. A bias of -0.96 points remains. B2's RMSE stays at 1.25 when the fast level is held at
+either end of its bootstrap band.
+
+The weekly mystery test (test window, 54 pairs): B2's change error is 0.27, the same as F23's model. Its slope is
+0.95 (SE 0.26), against 0.71 (SE 0.18) for F23's model: the two-factor dynamics move by the right amount. The
+belief-probe slope is -0.84 (SE 0.03) for B2 and -0.83 (SE 0.04) for F23's model; the traded slope is -0.67 (SE
+0.10). So both models make the 3-year vol move a little less with VIX1Y than the market does.
+
+The vol of variance. The time series of the indices gives eta 1.07 for the fast factor, 0.32 for the slow factor
+and 0.73 for both (weekly; daily steps give 1.28, 0.30 and 0.86, which shows the index noise). The smile needs 1.31.
+In a diffusion model the two must be equal, because a change of measure does not change the diffusion. With eta
+held at 0.73 (C2), the fit to the trades is worse (0.40 to 0.48), and the test error is lower (1.01). C2 is a
+diagnostic named in the protocol. It does not change the verdict, and one test window cannot show that it is better.
+
+What it means:
+- The second factor removes most of the term-structure error. The fast factor carries the moves of the short
+  tenors and loses half of a shock in 50 days. The slow factor carries the level.
+- The VIX family from 2009 to 2019 shows no reversion of the slow factor under the pricing measure. A long-run
+  level beyond 1 year is therefore not in the data. The slow drift carries the long end, and the 3-year trades set it.
+- The margin over a constant that knows the level of the test window is small. The model is the first in this
+  project that predicts the 3-year strike vol from the VIX family and passes the target, but its bias remains.
+- The gap in eta says that the 3-year skew is steeper than the measured vol of variance can make in this model. A
+  jump in the variance, or a level-dependent vol of variance (Gatheral 2006, ch. 8), could close it. That is a
+  question for later work, not a fit to tune now.
+
+Limits: 54 test days of thin trading. F23's model used the test window once before. The shared eta and rho, the
+form of the fit and the free slow drift came after F23; the protocol states each choice and the two fit-window
+drafts that came before it. The floor of the slow speed (1e-6 a year) is a model choice. The data limits of F23
+apply.

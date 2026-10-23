@@ -46,7 +46,7 @@ def coefficients(kappa, theta, tau):
     tau = np.asarray(tau, dtype=float)
     if np.any(~np.isfinite(tau)) or np.any(tau <= 0):
         raise ValueError("every tenor must be a positive number of years")
-    b = -np.expm1(-kappa * tau) / (kappa * tau)
+    b = _phi(kappa * tau)
     return theta * (1.0 - b), b
 
 
@@ -255,10 +255,13 @@ def _residuals_two(z, tenors, vols, sd):
 
 
 def to_free_two(kappa1, theta1, kappa2, c2):
-    if not (kappa1 > kappa2 > KAPPA2_MIN and theta1 > 0 and c2 > 0):
-        raise ValueError(f"need kappa1 > kappa2 > {KAPPA2_MIN}, theta1 > 0 and c2 > 0, got "
+    """The free coordinates of (kappa1, theta1, kappa2, c2). kappa2 may sit at the floor (a fit at the boundary
+    returns it there; code review, 2026-10-23): its coordinate is then held at -40, inside the solver's limit."""
+    if not (kappa1 > kappa2 >= KAPPA2_MIN and theta1 > 0 and c2 > 0):
+        raise ValueError(f"need kappa1 > kappa2 >= {KAPPA2_MIN}, theta1 > 0 and c2 > 0, got "
                          f"{(kappa1, theta1, kappa2, c2)}")
-    return np.array([math.log(kappa1 - kappa2), math.log(theta1), math.log(kappa2 - KAPPA2_MIN), math.log(c2)])
+    return np.array([math.log(kappa1 - kappa2), math.log(theta1), math.log(max(kappa2 - KAPPA2_MIN, math.exp(-40.0))),
+                     math.log(c2)])
 
 
 def fit_two(tenors, vols, sd, start=(5.0, 0.02, 0.5, 0.01), max_iter=200, fixed=()):
@@ -318,5 +321,7 @@ def vol_of_variance(kappa1, theta1, kappa2, c2, v, t, step=5):
         E.append(float(e @ e))
         D.append(float((vs[:-1, i] * ek * hp + 0.5 * drift * hp * hp).sum()))
         inn.append(e)
-    return {"eta1": math.sqrt(E[0] / D[0]), "eta2": math.sqrt(E[1] / D[1]), "eta": math.sqrt(sum(E) / sum(D)),
+    # a factor with no variance and no drift has nothing to measure (code review, 2026-10-23): NaN, not an error
+    eta = lambda e_, d_: math.sqrt(e_ / d_) if d_ > 0 else math.nan  # noqa: E731
+    return {"eta1": eta(E[0], D[0]), "eta2": eta(E[1], D[1]), "eta": eta(sum(E), sum(D)),
             "corr": float(np.corrcoef(inn[0], inn[1])[0, 1]), "n": int(h.size)}

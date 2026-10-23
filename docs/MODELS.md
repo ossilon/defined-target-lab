@@ -294,10 +294,63 @@ result is in FINDINGS F23:
   better. Most of the error is a bias of -1.20 points.
 - The fitted dynamics explain the weekly moves of the 3-year strike vol best of four readings.
 
-### 1.11 Parts not built yet
+### 1.11 The two-factor model
 
-- A two-factor variance model (Bergomi 2005), for the term structure that one speed cannot fit (step 5).
-- XX along Heston paths, priced from the tables (step 6).
+One speed cannot fit the VIX family (section 1.10). The two-factor Heston model of Christoffersen, Heston and Jacobs
+(2009) has two independent variance factors. Each factor is a Heston factor with its own speed and level:
+
+```math
+\frac{dS}{S} = \sqrt{v_1}\,dW_1 + \sqrt{v_2}\,dW_2, \qquad
+dv_i = \kappa_i(\theta_i - v_i)\,dt + \eta_i\sqrt{v_i}\,dZ_i, \qquad dW_i\,dZ_i = \rho_i\,dt
+```
+
+All other pairs of shocks are independent. So the log price is a sum of two independent Heston log prices, and the
+characteristic function is the product of the two Heston functions. The class `heston.DoubleHeston` holds the
+model. Both pricers of section 1.4 price it with no other change. With equal kappa, eta and rho the model is the
+one-factor model with v0 = v1 + v2 and theta = theta1 + theta2. The tests use this as an exact check.
+
+We chose this model and not the lognormal two-factor model of Bergomi (2005). This model keeps the closed-form
+prices, and so it keeps the two pricers as judges. The fits here use one eta and one rho for both factors. This is
+a restriction of the model of Christoffersen, Heston and Jacobs. The 3-year trades cannot identify a second eta and
+rho.
+
+The term structure. The variance-swap rate is the sum of the rates of the two factors:
+
+```math
+\text{rate}(\tau) = \theta_1 (1 - b_1) + b_1 v_1 + c_2 g_2 + b_2 v_2, \qquad g_2 = \frac{1 - b_2}{\kappa_2},
+\qquad c_2 = \kappa_2 \theta_2
+```
+
+Here b_i is the b of section 1.5 at the speed kappa_i. The function `termstructure.fit_two` fits kappa1, theta1,
+kappa2 and c2. For each day, it finds the two variances in closed form, with both variances at 0 or above.
+
+Three findings from the fit window set this form:
+1. If the variances can go below 0, any theta1 gives the same rates. The fit then put the variances below 0 on
+   1,868 of 2,587 days. With the variances at 0 or above, as the model requires, the fit identifies theta1.
+2. The slow speed goes to 0 from every start. So the fit uses the drift c2 of the slow factor, not its long-run
+   level. As kappa2 goes to 0, g2 goes to tau / 2, and every formula stays finite. The floor of kappa2 is 1e-6 each
+   year (`termstructure.KAPPA2_MIN`).
+3. The function `termstructure.vol_of_variance` measures eta from the time series of each factor. A change of
+   measure changes drifts, but not the diffusion. So a diffusion model must show the same eta in the indices and in
+   the option prices.
+
+The simulation. The function `stochvol.simulate_two` gives each factor its own QE step and its own martingale
+correction. The two next variances are independent, so the correction is a product of one term for each factor. The
+random numbers of factor 1 are those of the one-factor simulation, so its variance path is the same, bit for bit.
+
+The script `scripts/vol_twofactor_study.py` holds the protocol. Its commit came before any test-window number. The
+result is in FINDINGS F24:
+- The slow factor does not revert in any of 200 bootstrap refits.
+- From VIX and VIX3M alone, the model predicts VIX1Y out of sample with an error of 1.81 vol points. The one-factor
+  model gives 3.24.
+- The model passes the accuracy target with an error of 1.25 vol points. The constant 16.6% gives 1.35, and the
+  difference is within the noise of the 54 test days. The gain over the one-factor model is clear. A bias of -0.96
+  points remains.
+- The smile needs an eta of 1.31. The time series of the indices shows 0.73. So the model does not fit both.
+
+### 1.12 Parts not built yet
+
+- Price tables for two factors, and XX along two-factor paths (step 6).
 
 ## References
 
@@ -306,6 +359,8 @@ result is in FINDINGS F23:
 - Andersen, L. (2008). Simple and efficient simulation of the Heston stochastic volatility model. Journal of
   Computational Finance 11(3).
 - Bergomi, L. (2005). Smile dynamics II. Risk, October.
+- Christoffersen, P., Heston, S. and Jacobs, K. (2009). The shape and term structure of the index option smirk: why
+  multifactor stochastic volatility models work so well. Management Science 55(12), 1914-1932.
 - Demeterfi, K., Derman, E., Kamal, M. and Zou, J. (1999). A guide to volatility and variance swaps. Journal of
   Derivatives 6(4).
 - Fang, F. and Oosterlee, C. W. (2008). A novel pricing method for European options based on Fourier-cosine series

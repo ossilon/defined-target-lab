@@ -16,7 +16,10 @@ Modules (step 2: the closed-form judges come first):
 - stochvol (step 3): Heston paths by Andersen's (2008) QE scheme with the martingale correction, on montecarlo's
   random streams; eta = 0 reproduces montecarlo.paths.lognormal bit for bit;
 - pricetable (step 3): Heston implied vols on a grid of log-moneyness and vol for one remaining maturity, and calls
-  priced from it, fast enough to mark options along simulated paths.
+  priced from it, fast enough to mark options along simulated paths;
+- termstructure (step 4): the variance-swap term structure fitted to vol indices, with a bootstrap band;
+- two factors (step 5): heston.DoubleHeston, priced by both pricers; termstructure.fit_two (non-negative factor
+  variances, the slow factor's drift) and vol_of_variance; calibrate.fit_double_days; stochvol.simulate_two.
 The interface is provisional until v0.3.3: names and arguments may change. The mathematics, with sources, is in
 docs/MODELS.md.
 """

@@ -165,6 +165,9 @@ fb_ = ts.fit_two(TENORS, synthetic(P_B, v_true), sd, start=(3.0, 0.03, 0.5, 0.03
 check("at the boundary (data from kappa2 = 1e-7): kappa1, theta1 and c2 recovered (1e-5 relative), kappa2 at the "
       "floor (below 1e-5)", abs(fb_.kappa1 / 6.0 - 1) < 1e-5 and abs(fb_.theta1 / 0.015 - 1) < 1e-5
       and abs(fb_.c2 / 0.0115 - 1) < 1e-5 and fb_.kappa2 < 1e-5, fb_.params)
+fr = ts.fit_two(TENORS, synthetic(P_B, v_true), sd, start=fb_.params)
+check("a boundary fit's own parameters are a valid start (kappa2 at the floor; code review, 2026-10-23)",
+      fr.converged and abs(fr.c2 / fb_.c2 - 1) < 1e-8, (fr.params, fb_.params))
 noisy = holes + rng.normal(0.0, 0.003, holes.shape)
 boot, conv = ts.bootstrap_two(TENORS, noisy, np.full(4, 0.003), block=63, reps=40, seed=7)
 lo_, hi_ = np.percentile(boot[:, 1], [5, 95])
@@ -193,6 +196,11 @@ for label, k2s, th2 in (("kappa2 = 0.4", 0.4, 0.028), ("kappa2 = 1e-6", 1e-6, 0.
     check(f"{label}: weekly eta1, eta2 and pooled eta recovered, innovation correlation 0 (3 SE; means "
           f"{np.round(mean, 4).tolist()}, SE {np.round(se, 4).tolist()})",
           np.all(np.abs(mean - [0.5, 0.5, 0.5, 0.0]) < 3 * se), (mean, se))
+zero = np.column_stack((np.linspace(0.01, 0.03, 40), np.zeros(40)))
+with np.errstate(invalid="ignore", divide="ignore"):
+    deg = ts.vol_of_variance(6.0, 0.012, 1e-6, 0.0, zero, np.arange(40) / 252.0, step=1)
+check("a factor with no variance and no drift gives eta2 = NaN, not an error (code review, 2026-10-23)",
+      math.isnan(deg["eta2"]) and math.isfinite(deg["eta1"]), deg)
 
 # 7. The many-day smile fit.
 rng7 = np.random.default_rng(11)
@@ -271,6 +279,8 @@ check(f"(f) one call or two chunks, 1 thread or {threads}: bit-identical (every 
           for k in whole))
 raises("(g) one factor alone at eta = 0 is refused",
        lambda: stochvol.simulate_two(SEED, 10, t6, f1z, (0.02, 0.03, 0.4, 0.5, -0.7)), "both")
+raises("... a one-factor model is refused by simulate_two_model", lambda: stochvol.simulate_two_model(FAST, SEED, 10, t6),
+       "DoubleHeston")
 raises("... the Euler scheme is refused for two factors", lambda: stochvol.simulate_two_model(MODEL, SEED, 10, t6,
                                                                                              scheme="euler"), "scheme")
 raises("... the last two stream numbers are refused (the factors need stream + 1 and + 2)",
