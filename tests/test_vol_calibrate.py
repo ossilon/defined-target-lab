@@ -73,6 +73,29 @@ f5 = calibrate.fit_heston(vix_only, wrong)
 check("VIX family alone, all five free: eta and rho are reported as unidentified (infinite standard error)",
       math.isinf(f5.se["eta"]) and math.isinf(f5.se["rho"]), f5.se)
 
+# 4b. Many days, each with its own state variance (fit_heston_days, added 2026-10-23 for step 4): 40 synthetic days of
+#     Dec-2029-like quotes (maturity 3.5 down to 2.4 years, 4 strikes a day) from Gatheral's parameters; with kappa
+#     fixed, theta, eta and rho are recovered within 1e-6 relative; with theta fixed too, eta and rho.
+rng4 = np.random.default_rng(11)
+days = []
+for i in range(40):
+    T = 3.5 - i * 0.0275
+    v = float(0.0174 * math.exp(rng4.normal(0, 0.4)))
+    K = np.sort(rng4.choice(np.arange(6500.0, 15001.0, 500.0), 4, replace=False))
+    F = 7600.0 + 20.0 * i
+    iv = calibrate.black.implied_vols(calibrate.pricers.cos_prices(
+        Heston(v, TRUE.theta, TRUE.kappa, TRUE.eta, TRUE.rho), F, K, T), F, K, T)
+    days.append(calibrate.Day(v=v, F=F, T=T, K=K, iv=iv))
+fd = calibrate.fit_heston_days(days, Heston(0.02, 0.05, TRUE.kappa, 0.7, -0.4), fixed=("v0", "kappa"))
+rel = max(abs(getattr(fd.model, p) / getattr(TRUE, p) - 1) for p in ("theta", "eta", "rho"))
+check("many days, each with its own variance: theta, eta and rho recovered within 1e-6 relative (kappa fixed)",
+      rel < 1e-6 and fd.converged and fd.rmse < 1e-9, (rel, fd.model, fd.rmse))
+fd2 = calibrate.fit_heston_days(days, Heston(0.02, TRUE.theta, TRUE.kappa, 0.7, -0.4), fixed=("v0", "kappa", "theta"))
+rel = max(abs(getattr(fd2.model, p) / getattr(TRUE, p) - 1) for p in ("eta", "rho"))
+check("... and eta and rho with theta fixed too", rel < 1e-6, (rel, fd2.model))
+raises("fit_heston_days refuses a free v0 (each day has its own)",
+       lambda: calibrate.fit_heston_days(days, TRUE, fixed=("kappa",)), "v0")
+
 # 5. Standard errors, correlations and refusals.
 f = fits[0]
 check("with the full layout every standard error is finite and positive",

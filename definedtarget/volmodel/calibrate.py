@@ -180,20 +180,78 @@ class Fit:
     residuals: np.ndarray = field(repr=False)
 
 
-def fit_heston(quotes, start, fixed=(), max_iter=200):
-    """Fit the Heston parameters not named in `fixed` to the quotes, starting from `start` (a Heston model that
-    also supplies the fixed values)."""
+def _free_names(fixed):
     unknown = set(fixed) - set(PARAMS)
     if unknown:
         raise ValueError(f"unknown parameter name(s) in fixed: {sorted(unknown)}; the parameters are {PARAMS}")
     free = tuple(p for p in PARAMS if p not in fixed)
     if not free:
         raise ValueError("every parameter is fixed: there is nothing to fit")
+    return free
+
+
+def fit_heston(quotes, start, fixed=(), max_iter=200):
+    """Fit the Heston parameters not named in `fixed` to the quotes, starting from `start` (a Heston model that
+    also supplies the fixed values)."""
+    free = _free_names(fixed)
     fun = residual_function(quotes, start, free)
     z, info = levenberg_marquardt(fun, to_free(start, free), max_iter=max_iter)
     model = from_free(z, start, free)
     r = fun(z)
-    J = _jacobian(fun, z, r)
+    se, corr = _errors(_jacobian(fun, z, r), free, model)
+    resid_vol = r * quotes.sd
+    return Fit(model=model, rmse=float(math.sqrt(np.mean(resid_vol ** 2))), cost=float(r @ r), se=se, corr=corr,
+               free=free, iterations=info["iterations"], converged=info["converged"], message=info["message"],
+               residuals=resid_vol)
+
+
+@dataclass(frozen=True)
+class Day:
+    """One day of option quotes with its own state variance v (from that day's vol indices): forward F, maturity T
+    (years), strikes K and their implied vols iv (arrays of equal length)."""
+    v: float
+    F: float
+    T: float
+    K: np.ndarray
+    iv: np.ndarray
+
+
+def fit_heston_days(days, start, fixed=("v0", "kappa"), sd=0.01, max_iter=200):
+    """Fit the Heston parameters not named in `fixed` to option quotes on many days, each day priced with its own
+    state variance Day.v (start.v0 is not used). Residuals are (model vol - quoted vol) / sd. The result's model
+    carries the fitted parameters and start.v0."""
+    if "v0" not in fixed:
+        raise ValueError("v0 must be fixed: each day supplies its own state variance")
+    free = _free_names(fixed)
+    if not days:
+        raise ValueError("no days of quotes")
+    iv_all = np.concatenate([np.asarray(d.iv, dtype=float) for d in days])
+
+    def fun(z):
+        try:
+            with np.errstate(all="ignore"):
+                m = from_free(z, start, free)
+                model_iv = np.concatenate([
+                    black.implied_vols(pricers.cos_prices(Heston(d.v, m.theta, m.kappa, m.eta, m.rho), d.F, d.K, d.T),
+                                       d.F, d.K, d.T)
+                    for d in days])
+        except (ValueError, ArithmeticError, OverflowError):
+            return np.full(iv_all.size, np.inf)
+        r = (model_iv - iv_all) / sd
+        return np.where(np.isfinite(r), r, np.inf)
+
+    z, info = levenberg_marquardt(fun, to_free(start, free), max_iter=max_iter)
+    model = from_free(z, start, free)
+    r = fun(z)
+    se, corr = _errors(_jacobian(fun, z, r), free, model)
+    return Fit(model=model, rmse=float(math.sqrt(np.mean((r * sd) ** 2))), cost=float(r @ r), se=se, corr=corr,
+               free=free, iterations=info["iterations"], converged=info["converged"], message=info["message"],
+               residuals=r * sd)
+
+
+def _errors(J, free, model):
+    """Standard errors on the natural scale and the correlation matrix of the estimates, from the Jacobian J of the
+    weighted residuals on the free scale (see the module docstring)."""
     se = {p: float("nan") for p in PARAMS}
     corr = np.full((len(PARAMS), len(PARAMS)), np.nan)
     norms = np.linalg.norm(J, axis=0)
@@ -217,7 +275,4 @@ def fit_heston(quotes, start, fixed=(), max_iter=200):
         pos = [PARAMS.index(p) for p in names]
         with np.errstate(invalid="ignore", divide="ignore"):
             corr[np.ix_(pos, pos)] = cov / np.outer(sd, sd)
-    resid_vol = r * quotes.sd
-    return Fit(model=model, rmse=float(math.sqrt(np.mean(resid_vol ** 2))), cost=float(r @ r), se=se, corr=corr,
-               free=free, iterations=info["iterations"], converged=info["converged"], message=info["message"],
-               residuals=resid_vol)
+    return se, corr
