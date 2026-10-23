@@ -223,7 +223,8 @@ def main(argv):
         probs = check_file(f)
         total += len(probs)
         for line_no, why, s in probs:
-            print(f"{f.relative_to(ROOT).as_posix()}:{line_no}: {why}\n    {s[:160]}")
+            shown = f.relative_to(ROOT).as_posix() if f.resolve().is_relative_to(ROOT) else str(f)
+            print(f"{shown}:{line_no}: {why}\n    {s[:160]}")
     print(f"\n{total} problem(s) in {len(files)} file(s)")
     return 1 if total else 0
 

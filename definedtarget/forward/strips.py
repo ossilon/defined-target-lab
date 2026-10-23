@@ -13,8 +13,8 @@ SP:SPX and AMEX:SPY. With the S&P 500 at 7,712 (2026-10-21) the three forwards s
 brackets them after a fall of about 15% or a rise of about 20%.
 
 How a reply is filed (the same rules as `listed.py`)
-- The close it belongs to and protocol P2's read-time window come from `listed.close_for`; the feed's delay comes
-  from the reply (`listed.feed_delay_seconds`), so P3's market-time rule can be applied once P3 is frozen.
+- The close it belongs to and protocol P2's read-time window come from `listed.close_for`; each row's feed delay
+  comes from that row's update_mode (`row_delay`), so P3's market-time rule can be applied once P3 is frozen.
 - A strike without a usable two-sided quote (bid or ask missing, zero or below, or bid above ask) counts as missing.
 - The raw reply goes to data/raw/tradingview_strips/<close date>/<read time>.json; one row per quoted call goes to
   data/tables/listed_strips.csv. Nothing is ever overwritten.
@@ -67,10 +67,27 @@ def parse(reply_text):
     return quotes, [s for s in symbols() if s not in quotes]
 
 
+def row_delay(mode):
+    """Seconds of delay for one row's update_mode ('delayed_streaming_900' -> 900, 'streaming' -> 0), or None when
+    the mode is missing or unknown (that row then fails a market-time rule such as draft P3's)."""
+    if not isinstance(mode, str):
+        return None
+    if mode.startswith("delayed_streaming_"):
+        tail = mode.rsplit("_", 1)[1]
+        return int(tail) if tail.isdigit() else None
+    return 0 if mode in ("streaming", "realtime") else None
+
+
 def store(reply_text, read_utc, root=None):
-    """Check and file one reply. Returns a summary dict; a repeated reply for the same read time changes nothing."""
+    """Check and file one reply. Returns a summary dict; a repeated reply for the same read time changes nothing.
+    Each table row carries its own row's feed delay. (Code review, 2026-10-23: the first version took one delay for
+    the whole reply from listed.feed_delay_seconds, which refuses a reply whose rows disagree, so one odd row lost
+    the whole close.) The summary's feed_delay_s is the common delay, or None when the quoted rows disagree."""
     quotes, missing = parse(reply_text)
-    delay = listed.feed_delay_seconds(reply_text)
+    data = json.loads(reply_text)["data"]
+    delays = {sym: row_delay(data[sym].get("update_mode")) for sym in quotes if sym not in REFERENCE}
+    distinct = set(delays.values())
+    delay = distinct.pop() if len(distinct) == 1 else None
     close, in_window = listed.close_for(read_utc)
     root = fetch.data_dir(root)
     raw_dir = root / "raw" / "tradingview_strips" / close.isoformat()
@@ -98,8 +115,8 @@ def store(reply_text, read_utc, root=None):
                 sym = option_symbol(code, k)
                 if sym in quotes:
                     bid, ask = quotes[sym]
-                    w.writerow([close.isoformat(), stamp, in_window, delay, sym, expiry.isoformat(), k, bid, ask,
-                                spx, spy])
+                    w.writerow([close.isoformat(), stamp, in_window, delays[sym], sym, expiry.isoformat(), k, bid,
+                                ask, spx, spy])
     return summary
 
 

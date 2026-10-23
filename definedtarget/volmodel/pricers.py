@@ -231,7 +231,6 @@ def integral_prices(model, F, K, T, df=1.0, kind="call", tol=1e-14):
     x = np.log(F / K)
     total = np.zeros(K.size)
     start = 0.0
-    prev_env = None
     while start < K_MAX:
         nodes = (start + np.arange(PANELS_PER_BLOCK)[:, None] + _GL_X[None, :]).ravel()
         weights = np.tile(_GL_W, PANELS_PER_BLOCK)
@@ -245,8 +244,6 @@ def integral_prices(model, F, K, T, df=1.0, kind="call", tol=1e-14):
         rate = max(math.log(first / env) / PANELS_PER_BLOCK, 1e-3) if env > 0 and first > env else 1e-3
         if env == 0.0 or np.max(K * np.exp(0.5 * x)) * env / (math.pi * rate) <= tol * F:
             break
-        prev_env = env
-    del prev_env
     calls = df * (F - K / math.pi * total)
     return calls if kind == "call" else calls - df * (F - K)
 

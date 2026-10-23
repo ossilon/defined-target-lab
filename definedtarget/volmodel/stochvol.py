@@ -53,8 +53,11 @@ def _heston(seed, path0, npaths, code, v0, theta, kappa, eps, rho, psi_c, dt, mu
         for blk in range((nsteps + 1) // 2):
             a0, a1, a2, a3, ka, kb = _address(seed, path, blk, stream)
             x0, x1, x2, x3 = philox4x32(a0, a1, a2, a3, ka, kb)          # index draws (as montecarlo.paths)
-            b0, b1, b2_, b3, kc, kd = _address(seed, path, blk, sv)
-            y0, y1, y2, y3 = philox4x32(b0, b1, b2_, b3, kc, kd)        # variance draws (stream + 1)
+            if code == 3:                                                # lognormal limit: no variance draws
+                y0, y1, y2, y3 = x0, x1, x2, x3                          # (never read; code review, 2026-10-23)
+            else:
+                b0, b1, b2_, b3, kc, kd = _address(seed, path, blk, sv)
+                y0, y1, y2, y3 = philox4x32(b0, b1, b2_, b3, kc, kd)    # variance draws (stream + 1)
             for half in range(2):
                 k = 2 * blk + half
                 if k >= nsteps:

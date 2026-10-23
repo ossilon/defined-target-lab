@@ -5,7 +5,8 @@ Judges (tolerances fixed 2026-10-23, before the first run):
 2. The table reprices: at 400 random points inside the grid (log-moneyness -3 to 2, vol 0 to 120%), the table's
    call equals a direct COS price within 2e-6 per unit forward, at 4 remaining maturities from 1 week to 3.2 years
    (Gatheral's parameters).
-3. Outside the strike range the table returns the intrinsic value deep in the money and 0 far out of it.
+3. Outside the grid (strikes beyond k = -3 or 3, vols above 200%) the table gives the exact COS price and counts
+   those states (changed 2026-10-23 after a code review; see section 3).
 4. The martingale identity (the property the slide rule failed, FINDINGS F17): mark the Dec-2029 10,000 call by the
    table along QE-M paths on the daily calendar; its expected forward value at 0.5, 1.5 and 2.5 years equals today's
    price within 3 SE (2^20 paths).
@@ -47,11 +48,21 @@ for tau in (7 / 365, 0.25, 1.0, 3.2):
 check("the table reprices 400 random points per maturity within 2e-6 per unit forward (1 week to 3.2 years)",
       max(worst.values()) < 2e-6, worst)
 
-# 3. Outside the strike range.
-tab = pricetable.build(GAT, 1.0)
-out = pricetable.calls(tab, np.array([-6.0, 5.0]), np.array([0.04, 0.04]))
-check("outside the strike range: intrinsic deep in the money, 0 far out of it",
-      abs(out[0] - (1 - math.exp(-6.0))) < 1e-15 and out[1] == 0.0, out)
+# 3. Outside the grid the table prices exactly. (Code review, 2026-10-23: the first version returned the intrinsic
+#    value below the strike range, 0 above it and the top row's vol above 120%, which undervalues crash states.)
+tab = pricetable.build(GAT, 2.5)
+# deep in the money; far out of it at vol 200%; vol 250%; both at once. (First draft of this test used vol 71% for
+# the far strike, where the exact call is 2e-12: beyond k = 2 the value matters only at very high vol, for example
+# 6.4e-4 per unit forward at k = 2.5 and vol 120%, about 1.8% of the call's value today.)
+kk = np.array([-6.0, 3.5, 0.0, 3.5])
+vv = np.array([0.04, 4.0, 6.25, 6.25])
+got, n_out = pricetable.calls(tab, kk, vv, return_outside=True)
+ref = np.array([pricers.cos_prices(Heston(vi, GAT.theta, GAT.kappa, GAT.eta, GAT.rho), 1.0, math.exp(ki), 2.5)[0]
+                for ki, vi in zip(kk, vv)])
+check("outside the grid (strike or vol) the table gives the exact COS price and counts those states",
+      np.array_equal(got, ref) and n_out == 4, (got, ref, n_out))
+check("a crash state (index 97% below the strike's forward, vol 200%, 2.5 years left) keeps real value (> 1e-3)",
+      got[1] > 1e-3, got[1])
 raises("a table needs a positive remaining maturity", lambda: pricetable.build(GAT, 0.0), "maturity")
 
 # 4. The martingale identity for the table-marked option along QE-M paths.

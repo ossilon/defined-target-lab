@@ -121,6 +121,16 @@ check("the variance of X_T is positive in every case (Fang-Oosterlee's |c2| guar
 check("the printed c2 does turn negative in one of these cases (the symptom Fang and Oosterlee guarded against)",
       any(fo_c2(m, T, False) < 0 for m in SETS.values() for T in TS),
       min(fo_c2(m, T, False) for m in SETS.values() for T in TS))
+# Code review, 2026-10-23: the closed form loses digits as kappa shrinks (relative error 2e-8 at kappa = 0.001, a
+# negative variance at kappa = 1e-6); below kappa = 0.01 or kappa T = 0.001 the package uses log phi's second
+# derivative instead.
+small = [(Heston(0.04, 0.04, kap, 0.5, -0.7), T) for kap in (1e-3, 1e-4, 1e-6) for T in (9 / 365, 1.0)]
+gaps = [abs(m.cumulants(T)[1] / numeric_cumulants(m, T)[1] - 1) for m, T in small]
+check("tiny kappa (1e-3 to 1e-6): c2 stays positive and equals the numerical derivative (1e-7)",
+      max(gaps) < 1e-7 and all(m.cumulants(T)[1] > 0 for m, T in small), gaps)
+edge = Heston(0.04, 0.04, 0.01, 0.5, -0.7)
+check("at the switch (kappa = 0.01) the closed form and the numerical derivative agree (1e-9)",
+      abs(edge.cumulants(1.0)[1] / heston._variance_numeric(edge, 1.0) - 1) < 1e-9)
 EV = GATHERAL.expected_variance(3.2)
 check("expected total variance: theta T + (v0 - theta)(1 - e^{-kappa T}) / kappa (Gatheral ch. 11)",
       abs(EV - (0.0354 * 3.2 + (0.0174 - 0.0354) * (1 - math.exp(-1.3253 * 3.2)) / 1.3253)) < 1e-16, EV)

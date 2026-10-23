@@ -41,6 +41,16 @@
 - `docs/MODELS.md` is now in Simplified Technical English (ASD-STE100). `scripts/ste_check.py` checks it.
   `tests/test_docs_models.py` checks that each file and function that the document names exists.
 
+### Fixed: a code review of steps 2 and 3 (2026-10-23)
+- The price table priced states outside its grid too low. It returned 0 above the strike range and capped the vol
+  at 120%. The grid now covers k from -3 to 3 and vols up to 200%, and the COS pricer prices each state outside it.
+- The strike-grid capture refused a whole reply when one row reported a different feed delay. Each row now keeps
+  its own delay.
+- The variance of the log price lost digits for a small speed of mean reversion, down to a negative value at
+  kappa = 1e-6. For kappa below 0.01, or kappa T below 0.001, the code now uses a numerical derivative.
+- Smaller fixes: the fitter accepts zero iterations, and the style lint prints paths outside the repository. The
+  lognormal limit skips unused random numbers, and the table needs no scratch arrays.
+
 ## v0.3.0.1 (2026-10-18)
 
 Fixes from an independent external audit of v0.3.0. The audit ran the full test suite on Linux (Python 3.10 and 3.12)

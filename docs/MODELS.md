@@ -251,13 +251,16 @@ in s. Implied vols are smooth even near expiry, where prices bend sharply at the
 and one extra column at each outer edge, so that each cell has its full stencil. Below s = 0 the table uses the row
 at s = ds, because the vol depends on v = s^2 and is symmetric in s.
 
-Below the strike range the call has its intrinsic value, and above the range it is 0. The default range is k from
--3 to 2. A vol above the top of the grid takes the top value.
+The default grid covers k from -3 to 3 and vols up to 200%. So an index fall of 95% stays inside the grid. The
+COS pricer gives the exact price of each state outside the grid, and the table counts those states. A code review
+on 2026-10-23 replaced the first rule, which gave 0 above the strike range and capped the vol at 120%. That rule
+priced states with an extreme vol too low.
 
 The tests in `tests/test_vol_pricetable.py` check these properties:
 - the surface agrees with the one-at-a-time pricer to 1e-12;
 - the table gives the direct COS price within 2e-6 per unit of the forward, at 400 random points;
 - this holds at four maturities from one week to 3.2 years;
+- outside the grid the table gives the exact COS price;
 - the marked option is a martingale along simulated paths (section 1.9).
 
 ### 1.9 The error of the simulation, and the martingale identity

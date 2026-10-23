@@ -92,7 +92,24 @@ class Heston:
         o2 = (-x2 * e * e + 2 * x * (-k * T * e * e + 2 * rho * e * k * (1 + k * T) - 2 * k * k)
               + e * e - 4 * k * rho * e + 4 * k * k)
         c2 = th / (8 * k ** 3) * o1 + v0 / (4 * k ** 3) * o2
+        if k < 0.01 or k * T < 1e-3:
+            # the closed form subtracts terms of order kappa^2 to get a result of order kappa^3 T: it loses digits as
+            # kappa (or kappa T) shrinks (code review, 2026-10-23: relative error 2e-8 at kappa = 0.001, a negative
+            # variance at kappa = 1e-6). There the variance comes from log phi's second derivative instead.
+            c2 = _variance_numeric(self, T)
         return c1, c2
+
+
+def _variance_numeric(model, T, scale=1e-3):
+    """Var(X_T) = -d^2/du^2 log phi at 0: central differences, Richardson-extrapolated over h and 2h, with the step
+    h = scale / sqrt(E[W_T]) in units of the distribution's width (tests/test_vol_heston.py: within 1e-8)."""
+    h = scale / math.sqrt(model.expected_variance(T))
+
+    def second(s):
+        lp, lm = log_cf(model, s, T), log_cf(model, -s, T)
+        return -((lp + lm) / (s * s)).real
+
+    return (4.0 * second(h) - second(2.0 * h)) / 3.0
 
 
 def cf_parts(model, u, T):

@@ -58,6 +58,20 @@ stray = reply({("271217", 8000): (602.6, 605.5)},
               extra={"OPRA:SPX271217C8250.0": {"bid": 1.0, "ask": 2.0, "update_mode": "delayed_streaming_900"}})
 check("a symbol outside the grid is never filed", "OPRA:SPX271217C8250.0" not in strips.parse(stray)[0])
 check("the feed delay is read from the option rows (900 s)", listed.feed_delay_seconds(good) == 900)
+check("row delays: 'delayed_streaming_900' -> 900, 'streaming' -> 0, missing or unknown -> None",
+      strips.row_delay("delayed_streaming_900") == 900 and strips.row_delay("streaming") == 0
+      and strips.row_delay(None) is None and strips.row_delay("weird") is None and strips.row_delay("delayed_x") is None)
+
+# Code review, 2026-10-23: one row with a different feed mode must not lose the whole close.
+mixed = json.loads(good)
+mixed["data"][strips.option_symbol("291221", 8500)]["update_mode"] = "streaming"
+mixed = json.dumps(mixed)
+with tempfile.TemporaryDirectory() as tmp:
+    sm = strips.store(mixed, utc(2026, 10, 21, 20, 27), root=tmp)
+    rows = {r["symbol"]: r["feed_delay_s"] for r in strips.load(tmp)}
+    check("a reply whose rows report different feed modes is filed; each row keeps its own delay; no common delay",
+          sm["new"] and sm["feed_delay_s"] is None and rows[strips.option_symbol("291221", 8500)] == "0"
+          and rows[strips.option_symbol("271217", 8000)] == "900", (sm["feed_delay_s"], rows))
 
 
 # 3. Filing.

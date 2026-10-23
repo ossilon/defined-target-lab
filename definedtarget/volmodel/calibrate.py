@@ -129,7 +129,7 @@ def levenberg_marquardt(fun, x0, max_iter=200, xtol=1e-12, ftol=1e-15):
     if not np.all(np.isfinite(r)):
         raise ValueError("the starting point gives non-finite residuals")
     cost, lam = float(r @ r), 1e-3
-    message, converged = "iteration limit", False
+    message, converged, it = "iteration limit", False, 0          # it = 0 if max_iter is 0 (code review, 2026-10-23)
     for it in range(1, max_iter + 1):
         J = _jacobian(fun, x, r)
         A, g = J.T @ J, J.T @ r
