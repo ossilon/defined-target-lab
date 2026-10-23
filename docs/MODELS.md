@@ -348,9 +348,30 @@ result is in FINDINGS F24:
   points remains.
 - The smile needs an eta of 1.31. The time series of the indices shows 0.73. So the model does not fit both.
 
-### 1.12 Parts not built yet
+### 1.12 Price tables for two factors
 
-- Price tables for two factors, and XX along two-factor paths (step 6).
+The function `pricetable.build_two` stores the implied variance of the two-factor model at one remaining maturity.
+The grid has three axes: the log-moneyness k and the two vols s1 = sqrt(v1) and s2 = sqrt(v2). The function
+`pricers.cos_call_surface_two` prices the whole grid in one calculation. The function `pricetable.calls_two`
+interpolates with tricubic Catmull-Rom cubics and prices by Black-76. It prices a state outside the grid with the COS
+pricer.
+
+Two choices come from measurements:
+1. The table stores the implied variance, not the vol. At short maturities the vol is close to
+   sqrt(s1^2 + s2^2). That function has a cone at 0, which a cubic does not fit well. Its square has no cone.
+2. The step in k is 0.0125. Near the money at short maturities, the smile bends on a scale of sigma sqrt(tau). A
+   step of 0.025 gave an error of 4.8e-5 for each unit of forward at one month. A step of 0.0125 gave 8.7e-6 at one
+   month, 2.0e-6 at half a year and 6.4e-7 at 2.2 years. Smaller steps in the vols did not help.
+
+The tests mark the option along two-factor paths with these tables. Its mean at 0.5 and 2.0 years equals the price
+now within 3 standard errors (the martingale identity).
+
+The module `definedtarget/forward/fc2.py` uses the tables for the draft forecast model M5 (protocol FC2). It is not
+active until the ledger holds FC2.
+
+### 1.13 Parts not built yet
+
+- XX along two-factor paths, repriced each session, and the studies of v0.3.1 step 6.
 
 ## References
 

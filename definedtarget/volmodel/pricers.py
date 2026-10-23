@@ -152,6 +152,72 @@ def cos_call_surface(model, k, v, T, tail=1e-15, tol=1e-14):
     return calls
 
 
+STATE_BLOCK = 256                              # states per block in cos_call_surface_two (bounds memory)
+
+
+def cos_call_surface_two(model, k, v, T, tail=1e-15, tol=1e-14):
+    """cos_call_surface for a heston.DoubleHeston: c[i, j] = E[(S_T / F - e^{k_j})^+] for the states v[i] = (v1, v2)
+    (an n x 2 array; the model's own v1, v2 are not used). log E[e^{iuX}] = C1 + C2 + D1 v1 + D2 v2, with C and D
+    from each factor, so one evaluation of the factors serves every state. The range is the union of the Chernoff
+    ranges over the states. A separate function, so the one-factor tables stay the same bit for bit."""
+    if not isinstance(model, heston.DoubleHeston):
+        raise TypeError("cos_call_surface_two takes a heston.DoubleHeston")
+    k = np.atleast_1d(np.asarray(k, dtype=float))
+    v = np.asarray(v, dtype=float)
+    if k.ndim != 1 or not np.all(np.isfinite(k)):
+        raise ValueError("log-moneyness k must be a 1-D array of finite numbers")
+    if v.ndim != 2 or v.shape[1] != 2 or not np.all(np.isfinite(v)) or np.any(v < 0):
+        raise ValueError("states v must be an n x 2 array of finite variances, 0 or more")
+    if not (isinstance(T, (int, float, np.floating)) and math.isfinite(T) and T > 0):
+        raise ValueError(f"the maturity T (years) must be a finite positive number, got {T!r}")
+    f1, f2 = model.f1, model.f2
+
+    def parts(u):
+        (c1, d1), (c2, d2) = heston.cf_parts(f1, u, T), heston.cf_parts(f2, u, T)
+        return c1 + c2, d1, d2
+
+    cu, du1, du2 = parts(-1j * S_GRID)
+    cd, dd1, dd2 = parts(1j * S_GRID)
+    ends = [_chernoff(cu + du1 * a + du2 * b, cd + dd1 * a + dd2 * b, tail) for a, b in np.unique(v, axis=0)]
+    A, B = min(e[0] for e in ends), max(e[1] for e in ends)
+    w = B - A
+    K = np.exp(k)
+    a = A - k
+    d = np.clip(0.0, a, a + w)
+    total = np.zeros((v.shape[0], k.size))
+    done, nxt, converged = 0, N_START, False
+    while done < N_MAX:
+        block = np.zeros_like(total)
+        tail_phi = 0.0
+        for lo in range(done, nxt, CHUNK):
+            kk = np.arange(lo, min(nxt, lo + CHUNK))
+            om = kk * math.pi / w
+            C, D1, D2 = parts(om)
+            coef = _put_coefficients(om, a, d, w)
+            shift = np.exp(-1j * om * A)
+            for s0 in range(0, v.shape[0], STATE_BLOCK):
+                vs = v[s0:s0 + STATE_BLOCK]
+                phi = np.exp(C[None, :] + D1[None, :] * vs[:, :1] + D2[None, :] * vs[:, 1:])
+                term = (phi * shift[None, :]).real
+                if lo == 0:
+                    term[:, 0] *= 0.5
+                block[s0:s0 + STATE_BLOCK] += term @ coef
+                if lo + CHUNK >= nxt:                    # the last chunk: its terms are the series' tail (as above)
+                    tail_phi = max(tail_phi, float(np.max(np.abs(phi))))
+        total += block
+        done, nxt = nxt, 2 * nxt
+        if np.max(np.abs(block) * K[None, :]) <= tol and tail_phi <= tol:
+            converged = True
+            break
+    if not converged:
+        raise ArithmeticError(f"the COS series did not converge within {N_MAX} terms")
+    puts = K[None, :] * total
+    beyond = a + w <= 0.0
+    calls = puts + (1.0 - K)[None, :]
+    calls[:, beyond] = 0.0
+    return calls
+
+
 def chernoff_range(model, T, tail=1e-15):
     """[A, B] with P(X_T < A) <= tail and P(X_T > B) <= tail, from Chernoff's bound P(X > B) <= E[e^{sX}] e^{-sB}
     (s > 0, and the mirror image for the left tail), minimized over s up to the moment explosion. A distribution

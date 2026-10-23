@@ -19,7 +19,8 @@ Modules (step 2: the closed-form judges come first):
   priced from it, fast enough to mark options along simulated paths;
 - termstructure (step 4): the variance-swap term structure fitted to vol indices, with a bootstrap band;
 - two factors (step 5): heston.DoubleHeston, priced by both pricers; termstructure.fit_two (non-negative factor
-  variances, the slow factor's drift) and vol_of_variance; calibrate.fit_double_days; stochvol.simulate_two.
+  variances, the slow factor's drift) and vol_of_variance; calibrate.fit_double_days; stochvol.simulate_two;
+  pricetable.build_two and calls_two (step 6: tables of the implied variance on k x sqrt(v1) x sqrt(v2)).
 The interface is provisional until v0.3.3: names and arguments may change. The mathematics, with sources, is in
 docs/MODELS.md.
 """

@@ -26,7 +26,7 @@ import numba
 import numpy as np
 
 from . import black, pricers
-from .heston import Heston
+from .heston import DoubleHeston, Heston
 
 
 @dataclass(frozen=True)
@@ -110,6 +110,110 @@ def _calls(iv, k0, dk, ds, nk, ns, tau, k, v, out):
         ts, tk = fs - i, fk - j
         sig = _cubic(_row(iv, i - 1, j, tk), _row(iv, i, j, tk), _row(iv, i + 1, j, tk), _row(iv, i + 2, j, tk), ts)
         out[n] = black.call_price(1.0, math.exp(kn), 1.0, tau, sig)
+
+
+@dataclass(frozen=True)
+class TwoFactorTable:
+    """The table for a heston.DoubleHeston: iv[r1, r2, c] holds the implied VARIANCE (vol squared) at s1 = r1 ds1,
+    s2 = r2 ds2 (r = 0 .. ns, one ghost row above each grid) and k = k0 + (c - 1) dk (c = 0 .. nk + 1), mirrored
+    below s = 0 in each factor as in CallTable. `params` holds each factor's (theta, kappa, eta, rho), for the exact
+    prices outside the grid."""
+    tau: float
+    k0: float
+    dk: float
+    ds1: float
+    ds2: float
+    nk: int
+    ns1: int
+    ns2: int
+    params: tuple
+    iv: np.ndarray = field(repr=False)
+
+
+def build_two(model, tau, k_min=-3.0, k_max=3.0, nk=481, s_max=(2.0, 2.0), ns=(81, 81)):
+    """The table for a two-factor `model` (its factors' theta, kappa, eta and rho; v1, v2 are not used) at remaining
+    maturity tau. Defaults: k steps of 0.0125 (as CallTable), vol steps of 0.025 in each factor up to 200%.
+    It stores the implied VARIANCE: at short maturities the vol is close to sqrt(s1^2 + s2^2), a cone at 0 that a cubic
+    fits badly, and its square is smooth. First runs (2026-10-23, the step 5 fit, 300 random states): steps of
+    0.025 in k gave 4.8e-5 per unit forward at one month, near the money, where the smile bends on a scale of
+    sigma sqrt(tau); 0.0125 gave 8.7e-6 (one month), 2.0e-6 (half a year) and 6.4e-7 (2.2 years); finer vol steps
+    did not help."""
+    if not (isinstance(tau, (int, float, np.floating)) and math.isfinite(tau) and tau > 0):
+        raise ValueError(f"a table needs a positive remaining maturity tau (years), got {tau!r}")
+    if not (k_min < k_max and nk >= 4 and min(ns) >= 4 and min(s_max) > 0):
+        raise ValueError("the grid needs k_min < k_max, s_max > 0 and at least 4 points on each axis")
+    dk = (k_max - k_min) / (nk - 1)
+    ds1, ds2 = s_max[0] / (ns[0] - 1), s_max[1] / (ns[1] - 1)
+    k = k_min + dk * np.arange(-1, nk + 1)
+    s1, s2 = ds1 * np.arange(ns[0] + 1), ds2 * np.arange(ns[1] + 1)
+    states = np.stack(np.meshgrid(s1 * s1, s2 * s2, indexing="ij"), axis=-1).reshape(-1, 2)
+    calls_ = pricers.cos_call_surface_two(model, k, states, tau)
+    K = np.broadcast_to(np.exp(k), calls_.shape)
+    iv = black.implied_vols(calls_.ravel(), 1.0, K.ravel(), tau).reshape(calls_.shape)
+    idx = np.arange(iv.shape[1])
+    for row in iv:
+        ok = np.flatnonzero(np.isfinite(row))
+        if ok.size == 0:
+            raise ArithmeticError(f"no implied vol on a whole row of the table (tau = {tau})")
+        right = ok[np.clip(np.searchsorted(ok, idx), 0, ok.size - 1)]
+        left = ok[np.clip(np.searchsorted(ok, idx) - 1, 0, ok.size - 1)]
+        row[:] = row[np.where(np.abs(left - idx) <= np.abs(right - idx), left, right)]
+    f = (model.f1, model.f2)
+    return TwoFactorTable(tau=float(tau), k0=float(k_min), dk=float(dk), ds1=float(ds1), ds2=float(ds2), nk=nk,
+                          ns1=ns[0], ns2=ns[1], params=tuple((m.theta, m.kappa, m.eta, m.rho) for m in f),
+                          iv=(iv * iv).reshape(ns[0] + 1, ns[1] + 1, nk + 2))
+
+
+@numba.njit(cache=True)
+def _plane(iv, r1, r2, j, tk):
+    """The cubic along k at the grid point (r1, r2), mirrored below 0 in each factor."""
+    a, b = abs(r1), abs(r2)
+    return _cubic(iv[a, b, j], iv[a, b, j + 1], iv[a, b, j + 2], iv[a, b, j + 3], tk)
+
+
+@numba.njit(parallel=True, cache=True)
+def _calls_two(iv, k0, dk, ds1, ds2, nk, ns1, ns2, tau, k, v1, v2, out):
+    """Table prices for two factors (tricubic Catmull-Rom in the vol); NaN for a state outside the grid."""
+    kmax = k0 + dk * (nk - 1)
+    smax1, smax2 = ds1 * (ns1 - 1), ds2 * (ns2 - 1)
+    for n in numba.prange(k.size):
+        kn = k[n]
+        a = math.sqrt(v1[n]) if v1[n] > 0.0 else 0.0
+        b = math.sqrt(v2[n]) if v2[n] > 0.0 else 0.0
+        if kn < k0 or kn > kmax or a > smax1 or b > smax2:
+            out[n] = np.nan
+            continue
+        f1, f2, fk = a / ds1, b / ds2, (kn - k0) / dk
+        i1, i2, j = min(int(f1), ns1 - 2), min(int(f2), ns2 - 2), min(int(fk), nk - 2)
+        t1, t2, tk = f1 - i1, f2 - i2, fk - j
+        w = _cubic(_line(iv, i1 - 1, i2, j, tk, t2), _line(iv, i1, i2, j, tk, t2), _line(iv, i1 + 1, i2, j, tk, t2),
+                   _line(iv, i1 + 2, i2, j, tk, t2), t1)
+        out[n] = black.call_price(1.0, math.exp(kn), 1.0, tau, math.sqrt(w) if w > 0.0 else 0.0)
+
+
+@numba.njit(cache=True)
+def _line(iv, r1, i2, j, tk, t2):
+    """The cubic along s2 (through rows i2 - 1 .. i2 + 2) of the cubics along k, at factor-1 row r1."""
+    return _cubic(_plane(iv, r1, i2 - 1, j, tk), _plane(iv, r1, i2, j, tk), _plane(iv, r1, i2 + 1, j, tk),
+                  _plane(iv, r1, i2 + 2, j, tk), t2)
+
+
+def calls_two(table, k, v1, v2, return_outside=False):
+    """Undiscounted calls per unit forward at log-moneyness k and factor variances v1, v2 (arrays of equal length).
+    States outside the grid are priced exactly by pricers.cos_prices; with return_outside=True also their count."""
+    k, v1, v2 = (np.ascontiguousarray(np.asarray(x, dtype=float).ravel()) for x in (k, v1, v2))
+    if not (k.size == v1.size == v2.size):
+        raise ValueError("k, v1 and v2 must have the same length")
+    out = np.empty(k.size)
+    _calls_two(table.iv, table.k0, table.dk, table.ds1, table.ds2, table.nk, table.ns1, table.ns2, table.tau, k, v1,
+               v2, out)
+    outside = np.flatnonzero(np.isnan(out))
+    (th1, ka1, et1, rh1), (th2, ka2, et2, rh2) = table.params
+    for n in outside:
+        model = DoubleHeston(Heston(max(float(v1[n]), 0.0), th1, ka1, et1, rh1),
+                             Heston(max(float(v2[n]), 0.0), th2, ka2, et2, rh2))
+        out[n] = pricers.cos_prices(model, 1.0, math.exp(k[n]), table.tau)[0]
+    return (out, int(outside.size)) if return_outside else out
 
 
 def calls(table, k, v, return_outside=False):

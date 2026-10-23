@@ -66,7 +66,8 @@ def json_shape_problems(rel, text):
             rows = [json.loads(line) for line in text.splitlines() if line.strip()]
             if rel == "forward/predictions.jsonl":
                 return []                                    # the frozen ledger: checked by tests/test_ledger.py
-            bad = [i for i, r in enumerate(rows, 1) if not isinstance(r, dict) or r.get("protocol") != "FC1"
+            # FC2 (the draft dynamics-model protocol, v0.3.1 step 6) appends its own report entries to the same log
+            bad = [i for i, r in enumerate(rows, 1) if not isinstance(r, dict) or r.get("protocol") not in ("FC1", "FC2")
                    or r.get("kind") not in ("forecast", "outcome", "report") or set(r) - FORECAST_LOG_KEYS]
             return [f"{rel}:{i}: not a forecast-log entry (unexpected kind or fields)" for i in bad]
         rec = json.loads(text)

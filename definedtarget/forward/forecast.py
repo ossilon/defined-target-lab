@@ -52,7 +52,7 @@ OPTIONS_JUMP = 0.05                               # options per share moving mor
 # too (audit of v0.3.0, D06: the input-preparation code as well as the computation).
 CODE_FILES = ("definedtarget/forward/forecast.py", "definedtarget/xxpaths.py", "definedtarget/sim.py",
               "definedtarget/pricing.py", "definedtarget/calendar.py", "definedtarget/montecarlo/paths.py",
-              "definedtarget/montecarlo/rng.py")
+              "definedtarget/montecarlo/rng.py", "definedtarget/forward/fc2.py")
 
 
 @dataclass(frozen=True)
@@ -158,15 +158,27 @@ def simulate_growth(inp, T, name, npaths=PATHS, full=False):
     return o["nav_at_checkpoint"][:, 0] / o["nav0"], inp.rate - q, float(times[k])
 
 
-def make_forecast(inp, T, npaths=PATHS, provenance=None):
+def make_forecast(inp, T, npaths=PATHS, provenance=None, fc2_models=None, fc2_indices=None, fc2_void=None):
     """The forecast record (saved privately): inputs, and per model the growth at LEVELS and SPY's lognormal terms;
-    provenance: input_provenance() (which saved files the inputs came from), when known."""
+    provenance: input_provenance() (which saved files the inputs came from), when known. fc2_models: {name: params}
+    of protocol FC2's models (fc2.active(origin); FC1 rule 10), computed after M1-M4 from fc2_indices (that close's
+    VIX family); none before FC2's freeze date. FC2 never blocks FC1 (code review, 2026-10-23): if its inputs are
+    missing (fc2_void, the reason) or its model fails, the record holds M1-M4 and marks each FC2 model void."""
     models = {}
     for name in MODELS:
         g, mu, tau1 = simulate_growth(inp, T, name, npaths)
         path_vol = model_vols(inp)[name][0]
         models[name] = {"growth_levels": [float(f"{v:.12g}") for v in np.quantile(g, LEVELS)],
                         "spy_mu": mu, "spy_vol": path_vol, "years": tau1}
+    if fc2_models:
+        from . import fc2
+        for name, params in fc2_models.items():
+            try:
+                if fc2_void:
+                    raise ValueError(fc2_void)
+                models[name] = fc2.model_record(inp, T, fc2_indices, params, npaths)
+            except (ValueError, ArithmeticError) as err:
+                models[name] = {"void": f"no FC2 forecast: {err}"}
     rec = {"protocol": "FC1", "origin": inp.origin.isoformat(), "target": T.isoformat(), "paths": npaths,
            "seed": seed_for(inp.origin), "levels": "0.001 to 0.999 in steps of 0.001",
            "inputs": {k: (v.isoformat() if isinstance(v, date) else v) for k, v in asdict(inp).items()},
@@ -243,8 +255,11 @@ def score(forecast, nav_t, nav_T, spy_t, spy_T):
     Refuses missing or invalid numbers rather than scoring them."""
     _finite_positive(nav_t=nav_t, nav_T=nav_T, spy_t=spy_t, spy_T=spy_T)
     growth = nav_T / nav_t
-    raw = {name: {"xx": pit_from_levels(m["growth_levels"], growth), "spy": spy_pit(m, spy_t, spy_T)}
-           for name, m in forecast["models"].items()}
+    # an FC2 model saves SPY's growth at LEVELS (SPY is not lognormal there) and reads its PIT from them
+    raw = {name: {"xx": pit_from_levels(m["growth_levels"], growth),
+                  "spy": pit_from_levels(m["spy_levels"], spy_T / spy_t) if "spy_levels" in m else spy_pit(m, spy_t,
+                                                                                                          spy_T)}
+           for name, m in forecast["models"].items() if "void" not in m}          # a void FC2 model has no PIT
     # Check the UNROUNDED values: a crash month's SPY PIT can round to 0.0000, a valid rule 6 value that must be
     # recorded, not refused (re-check of v0.3.0.1)
     if not all(math.isfinite(p[k]) and 0.0 <= p[k] <= 1.0 for p in raw.values() for k in ("xx", "spy")):
@@ -280,33 +295,41 @@ def load_inputs(t, root=None, fetch_vix=True):
 
 
 def _vix_closes(t, root, fetch_vix=True):
-    """(VIX close for t, the manifest record of the file it came from). Prefers the newest file captured by the
-    entry's deadline, so a late run reads what an on-time run would have read (audit of v0.3.0, D05); falls back to
-    the newest file, and fetches a fresh copy once if none has t (the external capture refreshes VIX weekly)."""
+    """(VIX close for t, the manifest record of the file it came from): index_close for the VIX."""
+    return index_close("VIX", t, root, fetch_vix)
+
+
+def index_close(name, t, root, fetch_=True):
+    """(Cboe index `name`'s close for t in index points, the manifest record of the file it came from). Prefers the
+    newest file captured by the entry's deadline, so a late run reads what an on-time run would have read (audit of
+    v0.3.0, D05); falls back to the newest file, and fetches a fresh copy once if none has t (the external capture
+    refreshes the indices weekly). The close is the CLOSE column, or the only value column of a one-column file."""
     import io
 
     import pandas as pd
 
     from . import external, fetch, parse
+    file = f"{name}_History.csv"
 
     def from_file(recs):
         for rec in reversed(recs):
             v = pd.read_csv(io.StringIO(parse.read_text(root, rec)))
-            closes_ = dict(zip(pd.to_datetime(v["DATE"], format="%m/%d/%Y").dt.date, v["CLOSE"].astype(float)))
+            col = "CLOSE" if "CLOSE" in v.columns else v.columns[-1]
+            closes_ = dict(zip(pd.to_datetime(v["DATE"], format="%m/%d/%Y").dt.date, v[col].astype(float)))
             if t in closes_:
                 return closes_[t], rec
         return None, None
 
     cutoff = close_time(deadline(t)).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     with parse.captured_by(cutoff):
-        value, rec = from_file(parse.saved_versions(root, "VIX_History.csv"))
+        value, rec = from_file(parse.saved_versions(root, file))
     if value is None:
-        value, rec = from_file(parse.saved_versions(root, "VIX_History.csv"))
-    if value is None and fetch_vix:
-        fetch.capture(external.CBOE.format("VIX"), "VIX_History.csv", "cboe", b"DATE,", root=root)
-        value, rec = from_file(parse.saved_versions(root, "VIX_History.csv"))
+        value, rec = from_file(parse.saved_versions(root, file))
+    if value is None and fetch_:
+        fetch.capture(external.CBOE.format(name), file, "cboe", b"DATE,", root=root)
+        value, rec = from_file(parse.saved_versions(root, file))
     if value is None:
-        raise ValueError(f"no saved VIX history has a close for {t}")
+        raise ValueError(f"no saved {name} history has a close for {t}")
     return value, rec
 
 

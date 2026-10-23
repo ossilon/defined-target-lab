@@ -66,6 +66,16 @@
   factor with nothing to measure. `simulate_two_model` refuses a model that is not a `DoubleHeston`. The study also
   prints a check added after the run: the paired difference against the constant, with weekly-block errors.
 
+### Added: two-factor price tables and the draft forecast model M5 (step 6, part 1)
+- `pricetable.build_two` and `pricetable.calls_two`: price tables for the two-factor model, with the implied
+  variance on a grid of log-moneyness and the two vols. `pricers.cos_call_surface_two` prices the grid.
+- `definedtarget/forward/fc2.py`: the draft model M5 for the monthly forecast check (protocol FC2, not frozen yet).
+  `forward.forecast` adds the FC2 models to the record of an origin from the freeze date of FC2. It does not change
+  M1-M4. The command `scripts/forecast_check.py` takes `--fc2-draft` in dry runs.
+- `scripts/m5_parameters.py` fits the two candidate parameter sets for M5. It writes them to the private data folder,
+  because the fit uses licensed trade data. The ledger entry of FC2 will hold the chosen numbers.
+- Tests: `test_fc2`, and new checks in `test_vol_twofactor` (the tables and their martingale identity).
+
 ### Fixed: a code review of steps 2 and 3 (2026-10-23)
 - The price table priced states outside its grid too low. It returned 0 above the strike range and capped the vol
   at 120%. The grid now covers k from -3 to 3 and vols up to 200%, and the COS pricer prices each state outside it.

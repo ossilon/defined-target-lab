@@ -1,0 +1,50 @@
+{
+ "argv": [
+  "SP_SPX_daily.csv"
+ ],
+ "code": {
+  "definedtarget/__init__.py": "2c426c070e22a09e2a7bb68eae6e89c9093fb2f457b0cb418973946927c2e069",
+  "definedtarget/calendar.py": "326c930f3599c0f5d6b5b71aa85cda2d29f509506e4a0dc62f26651169d0a8ef",
+  "definedtarget/curves.py": "fbceb7bfeffbecbbc566b6322df3f76fe1c4c4ce26b0a4664e24bb62dd1613f4",
+  "definedtarget/dividends.py": "4304145c44e1b60c8c519d723d7093474ca60f90478af5dd0643bca785788fec",
+  "definedtarget/forward/__init__.py": "d4ceb70576e51c3247661d9a9b45147e3ead31fbe660874d6e957de2c7ba1b07",
+  "definedtarget/forward/fetch.py": "cab688f2ef3fbb4d26cccf99ddf3cada5846dbd53cafa17a309f0e2396892aef",
+  "definedtarget/forward/parse.py": "f641fc3a763e1dbf5befb190d4cee03babedf06cbceaf7598e3aebc5f4777d27",
+  "definedtarget/listedvols.py": "a2e4abe19ed19c8004ba9751674d05de002838a62f483ab22d31be2b84501bfc",
+  "definedtarget/marks.py": "78c43ee602320de1fdc783bafb6077cb00b838a351d4a7559604d1cede85c012",
+  "definedtarget/montecarlo/__init__.py": "1071aaadf944453a4820991835c86577f83918dc2b146c375e85ef5e8adcd339",
+  "definedtarget/montecarlo/manifest.py": "8b3c98f60d3dddc49053835191274a139b31241de4b806b76ef12b377e84f807",
+  "definedtarget/montecarlo/rng.py": "fcce8bb63e35a00ad7c7b36fddf3a7e347963c603d0f4c8147b32a718a251ebc",
+  "definedtarget/pricing.py": "13854e1285404bc4730f66cc5a9c92aeb4c3bde3270aacc87f7cb4cd759779d4",
+  "definedtarget/valuation.py": "3d316c86b43504c0081c02c4ac67820c847d5eb5538584297c48131c58a9110e",
+  "definedtarget/volmodel/__init__.py": "93f65494e6ea689bda27823726a343ec4ceec01aa62025476611f5079b033df7",
+  "definedtarget/volmodel/black.py": "5e955bac679cbfb1e239d47d01dbb855b0e550bbb91a27a7b4299dd2e54dc593",
+  "definedtarget/volmodel/calibrate.py": "e8c19e43a09a9f506d0095fe2930015a92f1218f1291e7e5f2ccaf491052df10",
+  "definedtarget/volmodel/heston.py": "fa085e315f89be9df7a52535968de078428f075eaede14f4bc8ff4c232198673",
+  "definedtarget/volmodel/pricers.py": "1ecea9fde30303ed9ec54390a38d023545bb1087ea19b98977f3e58b9529e414",
+  "definedtarget/volmodel/termstructure.py": "0e5e0f48010513455e7a232d5ede1184f72acd4385e2a38792dc6821282ec85b",
+  "scripts/m5_parameters.py": "95cdd00103bda75e811352179a30c551468bad54d8811ebb51e96b63b0fcd1ab",
+  "scripts/vol_holdout_study.py": "d9dc85f16d356657a4ca761bf17993cb6a293876a4425109dbae3ab1d18a6577",
+  "scripts/vol_twofactor_study.py": "5bfd1fe7102014516baae45727a31a659bf0b21f39deb5537fb84bc7fa287a47"
+ },
+ "date_utc": "2026-10-23",
+ "deterministic": true,
+ "inputs": {},
+ "kind": "run manifest",
+ "name": "m5_parameters",
+ "output": {
+  "lines": 83,
+  "sha256": "af672122a626068caa191119f5c4662ce8dd936f7dcfad4f9879e698717cc295"
+ },
+ "seconds": 564.0,
+ "seeds": [],
+ "settings": {},
+ "versions": {
+  "numba": "0.68.0",
+  "numpy": "2.5.3",
+  "pandas": "3.0.6",
+  "python": "3.13.15",
+  "scipy": "1.18.1",
+  "system": "Windows"
+ }
+}

@@ -29,7 +29,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
-from definedtarget.forward import fetch  # noqa: E402
+from definedtarget.forward import fc2, fetch  # noqa: E402
 from definedtarget.forward import forecast as fc  # noqa: E402
 
 
@@ -70,15 +70,31 @@ def cmd_forecast(a, log, store):
         return 2
     if fc.is_late(t, _now(a)):
         print("note: past the deadline; the entry will be marked late (it still counts)")
-    record = fc.make_forecast(fc.load_inputs(t), T, a.paths, provenance=fc.input_provenance(t))
+    provenance = fc.input_provenance(t)
+    fc2_models = fc2.active(t)
+    if a.dry_run and a.fc2_draft:                        # dry runs only: the draft FC2 models, before any freeze
+        draft = json.loads(Path(a.fc2_draft).read_text(encoding="utf-8"))
+        fc2_models = {f"M5-{label}": fc2.params_from(rec) for label, rec in sorted(draft.items())}
+    indices, void = None, None
+    if fc2_models:
+        try:
+            indices, provenance["fc2_indices"] = fc2.index_closes(t)
+        except ValueError as err:                         # FC2 never blocks FC1 (code review, 2026-10-23)
+            void = str(err)
+    record = fc.make_forecast(fc.load_inputs(t), T, a.paths, provenance=provenance, fc2_models=fc2_models,
+                              fc2_indices=indices, fc2_void=void)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "xb") as fh:                         # exclusive create: never overwrite a saved forecast
         fh.write(fc.canonical(record))
     entry = fc.append_log(fc.forecast_entry(record), log, now=_now(a), any_close=a.dry_run)
     print(f"forecast {t} -> {T}: saved {path.name}; log entry {entry['row_hash'][:12]} (late: {entry['late']})")
     for name, m in record["models"].items():
+        if "void" in m:
+            print(f"  {name}: VOID ({m['void']})")
+            continue
         lv = m["growth_levels"]
-        print(f"  {name}: path vol {m['spy_vol']:.4f}; growth p5 / p50 / p95 = {lv[49]:.4f} / {lv[499]:.4f} / "
+        vol = f"path vol {m['spy_vol']:.4f}" if "spy_vol" in m else "state v1, v2 = {:.4f}, {:.4f}".format(*m["state"])
+        print(f"  {name}: {vol}; growth p5 / p50 / p95 = {lv[49]:.4f} / {lv[499]:.4f} / "
               f"{lv[949]:.4f}" + ("  (private: not for publishing)" if not a.dry_run else ""))
     return 0
 
@@ -181,11 +197,12 @@ def main(argv):
     ap.add_argument("--log")
     ap.add_argument("--store")
     ap.add_argument("--target")
+    ap.add_argument("--fc2-draft", help="dry runs only: data/fc2_parameters.json, to run the draft FC2 models")
     a = ap.parse_args(argv)
     if a.dry_run and not (a.log and a.store):
         ap.error("--dry-run needs --log and --store (a scratch log and folder)")
-    if not a.dry_run and (a.log or a.store or a.target or a.paths != fc.PATHS):
-        ap.error("--log, --store, --target and --paths are for dry runs only (FC1 fixes them)")
+    if not a.dry_run and (a.log or a.store or a.target or a.paths != fc.PATHS or a.fc2_draft):
+        ap.error("--log, --store, --target, --paths and --fc2-draft are for dry runs only (FC1 fixes them)")
     log = Path(a.log) if a.dry_run else fc.LOG_PATH
     store = Path(a.store) if a.dry_run else fetch.data_dir() / "forecasts"
     if a.cmd in ("forecast", "outcome") and not a.origin:

@@ -30,6 +30,11 @@ Judges (tolerances fixed 2026-10-23, before the first run; SE = Monte Carlo stan
    martingale identity E[S_T] = S_0 e^{mu T} within 3 SE with the correction at 1-year steps; (e) on the daily NYSE
    calendar, the Dec-2029 10,000 call and an at-the-money call within 3 SE of COS; (f) one call or two chunks, 1
    thread or all: bit-identical; (g) one factor alone at eta = 0, the Euler scheme and the last stream are refused.
+9. Price tables for two factors (step 6; tolerances fixed 2026-10-23 from the table's measured error model, before
+   this test's first run): (a) cos_call_surface_two equals cos_prices state by state (1e-13 per unit forward);
+   (b) on 300 random states the table is within 2e-6 of COS at 2.2 years, 5e-6 at half a year and 2e-5 at one month;
+   (c) a state outside the grid is priced exactly; (d) the martingale identity: the option marked by the tables
+   along two-factor paths (forward terms) averages to today's price within 3 SE at 0.5 and 2.0 years.
 """
 import math
 from datetime import date
@@ -285,3 +290,50 @@ raises("... the Euler scheme is refused for two factors", lambda: stochvol.simul
                                                                                              scheme="euler"), "scheme")
 raises("... the last two stream numbers are refused (the factors need stream + 1 and + 2)",
        lambda: stochvol.simulate_two_model(MODEL, SEED, 10, t6, stream=2 ** 32 - 2), "stream")
+
+# 9. Price tables for two factors.
+from definedtarget.volmodel import pricetable  # noqa: E402
+
+B2 = DoubleHeston(Heston(0.02, 0.02623, 5.10, 1.314, -0.780), Heston(0.02, 0.01948 / 1e-6, 1e-6, 1.314, -0.780))
+
+
+def at(model, a, b):
+    return DoubleHeston(Heston(a, model.f1.theta, model.f1.kappa, model.f1.eta, model.f1.rho),
+                        Heston(b, model.f2.theta, model.f2.kappa, model.f2.eta, model.f2.rho))
+
+
+st = np.array([[0.0, 0.02], [0.01, 0.0], [0.09, 0.03], [0.4, 0.2]])
+ks = np.array([-1.0, -0.2, 0.0, 0.18, 0.6])
+surf = pricers.cos_call_surface_two(B2, ks, st, 1.5)
+direct = np.array([pricers.cos_prices(at(B2, a, b), 1.0, np.exp(ks), 1.5) for a, b in st])
+check("(a) cos_call_surface_two equals cos_prices state by state (1e-13 per unit forward)",
+      np.max(np.abs(surf - direct)) < 1e-13, np.max(np.abs(surf - direct)))
+rng9 = np.random.default_rng(1)
+k9, a9, b9 = rng9.uniform(-1.0, 1.0, 300), rng9.uniform(0, 0.3, 300) ** 2 * 4, rng9.uniform(0, 0.5, 300) ** 2
+tables = {}
+for tau9, tol9 in ((2.2, 2e-6), (0.5, 5e-6), (1 / 12, 2e-5)):
+    tables[tau9] = pricetable.build_two(B2, tau9)
+    got9 = pricetable.calls_two(tables[tau9], k9, a9, b9)
+    ex9 = np.array([pricers.cos_prices(at(B2, a, b), 1.0, np.exp(kk), tau9)[0] for kk, a, b in zip(k9, a9, b9)])
+    check(f"(b) the table at tau = {tau9:.3f} is within {tol9:.0e} of COS on 300 random states "
+          f"(worst {np.max(np.abs(got9 - ex9)):.1e})", np.max(np.abs(got9 - ex9)) < tol9)
+far, nout = pricetable.calls_two(tables[2.2], [0.1], [5.0], [0.03], return_outside=True)
+check("(c) a state outside the grid (fast vol 224%) is priced exactly by COS",
+      nout == 1 and far[0] == pricers.cos_prices(at(B2, 5.0, 0.03), 1.0, np.exp(0.1), 2.2)[0])
+T9 = 2.7
+t9 = np.linspace(0.0, T9, int(T9 * 252) + 1)
+cp9 = (int(0.5 * 252), int(2.0 * 252))
+o9 = stochvol.simulate_two_model(B2, SEED, 1 << 19, t9, checkpoints=cp9)
+c0 = pricers.cos_prices(B2, 1.0, np.exp(0.18), T9)[0]
+res9 = []
+for j, step in enumerate(cp9):
+    tab9 = pricetable.build_two(B2, T9 - float(t9[step]))
+    # (first run, 2026-10-23: the test left out the forward F_t = e^x; the tables give calls per unit forward, so the
+    #  gap was -5.4% and -23%. Diagnosis: the pricers agree at v2 = 0 and a simulation started at v2 = 0 matches COS.)
+    x9 = o9["at_checkpoint"][:, j]
+    marks = np.exp(x9) * pricetable.calls_two(tab9, 0.18 - x9, o9["v_at_checkpoint"][:, j, 0],
+                                              o9["v_at_checkpoint"][:, j, 1])
+    m9, s9 = mean_se(marks)
+    res9.append((round(float(t9[step]), 2), round((m9 / c0 - 1) * 100, 3), round(s9 / c0 * 100, 3)))
+check(f"(d) the martingale identity: the table-marked option along two-factor paths averages to today's price "
+      f"within 3 SE (t, gap %, SE %: {res9})", all(abs(g) < 3 * s for _, g, s in res9), res9)
