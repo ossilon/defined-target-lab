@@ -524,3 +524,64 @@ What it means:
 
 Limits: here the model is right by construction, so the test says nothing yet about the real market. The three
 checkpoints use the same paths, so their errors are correlated.
+
+**F23. Under the fixed holdout the one-factor Heston model misses the accuracy target, but it describes the weekly
+moves of the 3-year strike vol best.** The script `scripts/vol_holdout_study.py` measured this on 2026-10-23. The
+protocol is in the script, and its commit came before any test-window number.
+
+Stage 1 fits the VIX family (VIX, VIX3M, VIX6M and VIX1Y) from 2009-09-18 to 2019-12-31 (2,587 days). One speed
+cannot fit it. The fit puts kappa at 0.147 a year and the long-run vol at 54.9%. The block bootstrap gives no upper
+end for that vol: 64 of 200 refits put it above 100%. The RMSE in the fit window is 1.52 vol points for VIX and 1.41
+for VIX1Y.
+
+Out of sample (2020-01-01 to 2026-10-16), each day's VIX alone predicts the longer indices:
+
+| Index | Model RMSE | Flat (= VIX) | VIX plus the mean spread |
+|---|---|---|---|
+| VIX3M | 2.27 | 2.91 | 2.03 |
+| VIX6M | 3.40 | 4.90 | 3.36 |
+| VIX1Y | 3.98 | 6.39 | 4.82 |
+
+Stage 2 fits the smile to 157 listed trades of the December 2029 calls (2024-06-14 to 2025-06-30). Variant B, the
+primary, takes the long-run level from the trades: long-run vol 70.4%, eta 1.14, rho -0.85, in-sample RMSE 0.42
+vol points. Variant A keeps the level of stage 1.
+
+The accuracy target uses 54 days of the 10,000 strike, from 2025-07-01 to 2026-09-30:
+
+| Prediction | RMSE (vol points) | Mean error (vol points) |
+|---|---|---|
+| Model B (primary) | 1.39 | -1.20 |
+| Model A | 1.32 | -1.12 |
+| Constant 16.6% | 1.35 | +0.68 |
+| Sticky strike plus the change of VIX1Y | 1.82 | -1.01 |
+| 0.77 x VIX1Y | 2.10 | +1.59 |
+| Slide rule (1.0 point per 10% fall) | 3.62 | -3.12 |
+
+The verdict is MISS. Model B is inside the 1.5-point target, but the constant 16.6% is better. Most of the error of
+B is a bias of -1.20 points. The constant comes from the marks of October 2026, so it knows the level of the test
+window in advance. The protocol named this benchmark, so the verdict stands.
+
+The mystery test compares weekly changes of the traded vol with the change that each reading predicts (test window,
+54 pairs):
+
+| Reading | RMSE of the change error | Slope of traded on predicted (SE) |
+|---|---|---|
+| Fitted dynamics (B) | 0.27 | 0.71 (0.18) |
+| Sticky strike (no change) | 0.30 | - |
+| Slide rule | 0.34 | 0.19 (0.24) |
+| Change of VIX1Y | 0.72 | 0.11 (0.05) |
+
+The belief probe regresses ln(iv / VIX1Y) on ln(VIX1Y): the slope is -0.67 (SE 0.10) on 124 days, and -0.61 (SE 0.10)
+at weekly spacing.
+
+What it means:
+- The 3-year vol at the strike of XX moves about 0.1 points for each point of VIX1Y. In relative terms it moves
+  about a third as much as VIX1Y. A fixed multiple of VIX1Y, such as the 0.77 rule, overstates its moves.
+- The fitted dynamics explain the weekly moves best. This agrees with frozen prediction H20: at 3 years the fixed
+  strike vol moves little when the index moves.
+- The level is the problem. One-factor Heston cannot fit the VIX family, and its long-run level has no upper bound.
+  So the model predicts the level of the 3-year vol with a bias. The two-factor model (v0.3.1, step 5) must fix this.
+
+Limits: 54 test days of thin trading; the last trade is not at the close; 25 of the 54 weekly pairs span more than
+one week (on one-week pairs the dynamics give 0.25 and a slope of 0.79); the VIX family drops strikes at two zero
+bids; F12 saw these trades before the protocol.

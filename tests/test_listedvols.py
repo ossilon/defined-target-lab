@@ -34,6 +34,12 @@ for t, want, why in cases:
     check(f"trade date: {why}", listedvols.trade_date(t) == want, (listedvols.trade_date(t), want))
 check("the first 10,000-strike bar (1718324100) is the 2024-06-14 session", listedvols.trade_date(1718324100)
       == date(2024, 6, 14))
+try:
+    listedvols.trade_date(int(datetime(2025, 3, 3, 9, 30, tzinfo=NY).timestamp()))
+    refused = False
+except ValueError:
+    refused = True
+check("a bar stamped in the morning is refused (the evening rule would put it on the wrong day)", refused)
 
 # 2. Round trip through Black-76 with the module's own forward.
 curve = curves.Curve(date(2025, 3, 3), {0.25: 0.043, 1.0: 0.041, 2.0: 0.040, 5.0: 0.041})

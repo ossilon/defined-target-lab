@@ -128,11 +128,18 @@ def main(argv):
     sd = np.full(4, SD_INDEX)
     fit_mask = np.array([FIT_VIX[0] <= d <= FIT_VIX[1] for d in days])
     tf = ts.fit(TENORS, vols[fit_mask], sd)
-    boot = ts.bootstrap(TENORS, vols[fit_mask], sd, block=63, reps=a.boot, seed=SEED)
+    boot, conv = ts.bootstrap(TENORS, vols[fit_mask], sd, block=63, reps=a.boot, seed=SEED, return_converged=True)
+    print("Index files end: " + ", ".join(f"{n} {max(idx[n])}" for n in INDICES) + f"; common end {days[-1]}")
     print(f"Stage 1, the term structure: {fit_mask.sum()} days from {FIT_VIX[0]} to {FIT_VIX[1]}")
     print(f"  kappa {tf.kappa:.4f} (5-95% {np.percentile(boot[:, 0], 5):.4f} to {np.percentile(boot[:, 0], 95):.4f}); "
           f"theta {tf.theta:.5f}, long-run vol {100 * math.sqrt(tf.theta):.2f}% (5-95% "
           f"{100 * math.sqrt(np.percentile(boot[:, 1], 5)):.2f}% to {100 * math.sqrt(np.percentile(boot[:, 1], 95)):.2f}%)")
+    # added after the code review (2026-10-23): how many refits converged, and how many ran off
+    runaway = int((np.sqrt(boot[:, 1]) > 1.0).sum())
+    print(f"  bootstrap: {int(conv.sum())} of {len(conv)} refits converged; {runaway} put the long-run vol above 100% "
+          f"(the upper end is not bounded); over converged refits only, long-run vol 5-95% "
+          f"{100 * math.sqrt(np.percentile(boot[conv, 1], 5)):.2f}% to "
+          f"{100 * math.sqrt(np.percentile(boot[conv, 1], 95)):.2f}%")
     print("  in-sample RMSE (vol points): " + ", ".join(f"{n} {100 * r:.2f}" for n, r in zip(INDICES, tf.rmse)))
     k1, th1 = tf.kappa, tf.theta
     print(f"  model 3-year variance-swap vol at the long-run level: {100 * math.sqrt(th1):.2f}%; the 3-year rate at the "
@@ -216,8 +223,13 @@ def main(argv):
         r["model"] = model_iv(fb.model, r["v"], r["F"], 10000.0, r["T"])
     print("\nThe mystery test: weekly changes of the 10,000 strike's traded vol against each reading")
     print("| pairs | reading | RMSE of the change error | slope of traded on predicted (SE) |\n|---|---|---|---|")
-    for label, pairs in (("test window", [(p, q) for p, q in zip(wk, wk[1:]) if p["date"] >= TEST_TRADES_START]),
-                         ("full history", list(zip(wk, wk[1:])))):
+    test_pairs = [(p, q) for p, q in zip(wk, wk[1:]) if p["date"] >= TEST_TRADES_START]
+    # added after the code review (2026-10-23): some pairs span weeks without a trade; the frozen rows keep them,
+    # and the extra row uses one-week pairs only
+    one_week = [(p, q) for p, q in test_pairs if (q["date"] - p["date"]).days <= 7]
+    print(f"(test-window pairs spanning more than one week: {len(test_pairs) - len(one_week)} of {len(test_pairs)})")
+    for label, pairs in (("test window", test_pairs), ("full history", list(zip(wk, wk[1:]))),
+                         ("test window, one-week pairs only", one_week)):
         d_tr = np.array([q["iv"] - p["iv"] for p, q in pairs])
         readings = {"slide rule": [0.01 * math.log(q["S"] / p["S"]) / math.log(0.9) for p, q in pairs],
                     "level shift": [q["vix1y"] - p["vix1y"] for p, q in pairs],

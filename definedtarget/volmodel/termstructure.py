@@ -103,8 +103,10 @@ def fit(tenors, vols, sd, start=(1.0, 0.04), max_iter=200):
                    converged=info["converged"], message=info["message"])
 
 
-def bootstrap(tenors, vols, sd, block=63, reps=200, seed=0, start=(1.0, 0.04)):
-    """(reps x 2) array of (kappa, theta) refits on moving-block resamples of the days (blocks of `block` days)."""
+def bootstrap(tenors, vols, sd, block=63, reps=200, seed=0, start=(1.0, 0.04), return_converged=False):
+    """(reps x 2) array of (kappa, theta) refits on moving-block resamples of the days (blocks of `block` days).
+    With return_converged=True also a boolean array: which refits the solver reported as converged (code review,
+    2026-10-23: degenerate refits, kappa near 0 with theta running off, must be counted, not silently pooled)."""
     tenors, vols, sd = _check(tenors, vols, sd)
     n = vols.shape[0]
     if not (isinstance(block, int) and 1 <= block <= n):
@@ -112,9 +114,11 @@ def bootstrap(tenors, vols, sd, block=63, reps=200, seed=0, start=(1.0, 0.04)):
     rng = np.random.default_rng(seed)
     nblocks = -(-n // block)
     out = np.empty((reps, 2))
+    ok = np.zeros(reps, dtype=bool)
     for r in range(reps):
         starts = rng.integers(0, n - block + 1, nblocks)
         idx = (starts[:, None] + np.arange(block)[None, :]).ravel()[:n]
         f = fit(tenors, vols[idx], sd, start=start)
         out[r] = f.kappa, f.theta
-    return out
+        ok[r] = f.converged
+    return (out, ok) if return_converged else out

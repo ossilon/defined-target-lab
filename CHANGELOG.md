@@ -41,6 +41,15 @@
 - `docs/MODELS.md` is now in Simplified Technical English (ASD-STE100). `scripts/ste_check.py` checks it.
   `tests/test_docs_models.py` checks that each file and function that the document names exists.
 
+### Added: the fit to real data under the holdout (step 4)
+- `volmodel.termstructure` fits the Heston term structure to vol indices, with a block bootstrap for the band.
+- `calibrate.fit_heston_days` fits the smile to trades on many days, each day with its own variance.
+- `definedtarget/listedvols.py` gives the implied vols of the listed December 2029 calls from their daily trades.
+- `scripts/vol_holdout_study.py` holds the protocol. Its commit came before any test-window number. FINDINGS F23
+  gives the result: the model misses the accuracy target, and its dynamics explain the weekly moves best.
+- After a code review, the study prints the end date of each index file. It also counts the converged bootstrap
+  refits and the weekly pairs that span a gap. Trade dates now refuse a bar stamp outside the evening.
+
 ### Fixed: a code review of steps 2 and 3 (2026-10-23)
 - The price table priced states outside its grid too low. It returned 0 above the strike range and capped the vol
   at 120%. The grid now covers k from -3 to 3 and vols up to 200%, and the COS pricer prices each state outside it.

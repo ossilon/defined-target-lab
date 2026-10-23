@@ -31,8 +31,11 @@ TEN_K_FILE = "listed_spx_10000c_dec2029_daily.py"
 
 
 def trade_date(t):
-    """The NYSE trade date of a TradingView daily option bar stamped t (unix seconds)."""
+    """The NYSE trade date of a TradingView daily option bar stamped t (unix seconds). Refuses a stamp that is not in
+    the evening (16:00-23:59 New York), where the rule would put the bar on the wrong day (code review, 2026-10-23)."""
     ny = datetime.fromtimestamp(int(t), tz=timezone.utc).astimezone(NEW_YORK)
+    if ny.hour < 16:
+        raise ValueError(f"bar stamped {ny.isoformat()} New York: expected the evening before its trade date (20:15)")
     return calendar.next_session(ny.date())
 
 

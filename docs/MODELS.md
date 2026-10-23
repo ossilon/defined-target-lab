@@ -277,10 +277,25 @@ Gatheral (FINDINGS F22). It uses 16,777,216 paths for each case.
 So the drift of F17 is a property of the slide rule. A model in which the index and its variance move together does
 not have it.
 
-### 1.10 Parts not built yet
+### 1.10 The fit to real data under the holdout
 
-- The fit to the real VIX family and to the listed strikes under the fixed holdout, with the out-of-sample accuracy
-  target (v0.3.1, step 4).
+The module `volmodel.termstructure` fits one speed kappa and one long-run variance theta to a history of vol
+indices. It also fits the variance of each day. For given kappa and theta, the variance of a day has a closed form.
+The fit then moves only kappa and theta. A moving-block bootstrap of the days gives the band of theta.
+
+The function `calibrate.fit_heston_days` fits the smile to option trades on many days. Each day has its own
+variance, from the vol indices of that day. The module `definedtarget/listedvols.py` gives the implied vols of the
+listed December 2029 calls from their daily trades.
+
+The script `scripts/vol_holdout_study.py` holds the protocol. Its commit came before any test-window number. The
+result is in FINDINGS F23:
+- One speed cannot fit the VIX family. The long-run vol of the fit is 54.9%, and the bootstrap gives it no upper end.
+- The model misses the accuracy target. Its error is 1.39 vol points, inside the 1.5 target, but a constant 16.6% is
+  better. Most of the error is a bias of -1.20 points.
+- The fitted dynamics explain the weekly moves of the 3-year strike vol best of four readings.
+
+### 1.11 Parts not built yet
+
 - A two-factor variance model (Bergomi 2005), for the term structure that one speed cannot fit (step 5).
 - XX along Heston paths, priced from the tables (step 6).
 
